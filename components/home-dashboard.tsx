@@ -24,6 +24,8 @@ type Pin = { id: string; x: number; y: number; title: string; kind: 'light' | 's
 type Mode = 'demo' | 'live'
 type HAState = { entity_id: string; state: string; attributes?: Record<string, unknown> }
 
+const HA_API_PATH = '/api/ha'
+
 const ENTITY_MAP = {
   lights: {
     kho: 'light.kho',
@@ -138,6 +140,21 @@ function pinsToCode(pins: Pin[]) {
   return `const pins: Pin[] = [\n${lines.join('\n')}\n]`
 }
 
+function formatErrorDetail(payload: unknown): string {
+  if (payload == null) return ''
+  if (typeof payload === 'string') return payload
+  if (typeof payload === 'object') {
+    const obj = payload as Record<string, unknown>
+    if (typeof obj.detail === 'string' && obj.detail) return obj.detail
+    if (obj.detail != null) {
+      try { return JSON.stringify(obj.detail) } catch (error) { return String(obj.detail) }
+    }
+    if (typeof obj.error === 'string' && obj.error) return obj.error
+    try { return JSON.stringify(obj) } catch (error) { return String(obj) }
+  }
+  return String(payload)
+}
+
 export function HomeDashboard() {
   const [mode, setMode] = useState<Mode>('demo')
   const [adminPassword, setAdminPassword] = useState('')
@@ -173,7 +190,7 @@ export function HomeDashboard() {
       'x-admin-password': password,
       ...(init?.headers as Record<string, string> | undefined),
     }
-    const response = await fetch('/api/ha', { ...init, headers, cache: 'no-store' })
+    const response = await fetch(HA_API_PATH, { ...init, headers, cache: 'no-store' })
     return response
   }, [adminPassword])
 
@@ -247,7 +264,9 @@ export function HomeDashboard() {
         return
       }
       if (!response.ok) {
-        if (!silent) addEvent(`Đồng bộ HA thất bại (${response.status})`, 'system')
+        const body = await response.json().catch(() => null)
+        const detail = formatErrorDetail(body)
+        if (!silent) addEvent(`Đồng bộ HA thất bại (${response.status})${detail ? `: ${detail}` : ''}`, 'system')
         return
       }
       const data = await response.json()
@@ -256,7 +275,8 @@ export function HomeDashboard() {
         if (!silent) addEvent('Đã đồng bộ trạng thái từ Home Assistant', 'sensor')
       }
     } catch (error) {
-      if (!silent) addEvent('Không thể kết nối Home Assistant', 'system')
+      const message = error instanceof Error ? error.message : String(error)
+      if (!silent) addEvent(`Không thể kết nối Home Assistant: ${message}`, 'system')
     }
   }, [adminPassword, callHA, applyStates])
 
@@ -285,10 +305,17 @@ export function HomeDashboard() {
     if (mode === 'live' && liveConnected) {
       const entityId = ENTITY_MAP.lights[room]
       callHA({ method: 'POST', body: JSON.stringify({ entity_id: entityId, action: next ? 'turn_on' : 'turn_off' }) })
-        .then(response => {
-          if (!response.ok) addEvent(`HA từ chối lệnh cho ${entityId}`, 'system')
+        .then(async response => {
+          if (!response.ok) {
+            const body = await response.json().catch(() => null)
+            const detail = formatErrorDetail(body)
+            addEvent(`HA từ chối lệnh cho ${entityId} (${response.status})${detail ? `: ${detail}` : ''}`, 'system')
+          }
         })
-        .catch(() => addEvent(`Không gửi được lệnh tới ${entityId}`, 'system'))
+        .catch(error => {
+          const message = error instanceof Error ? error.message : String(error)
+          addEvent(`Không gửi được lệnh tới ${entityId}: ${message}`, 'system')
+        })
     }
   }
   const toggleAllLights = () => {
@@ -304,7 +331,10 @@ export function HomeDashboard() {
       ;(Object.keys(ENTITY_MAP.lights) as RoomKey[]).forEach(room => {
         const entityId = ENTITY_MAP.lights[room]
         callHA({ method: 'POST', body: JSON.stringify({ entity_id: entityId, action: next ? 'turn_on' : 'turn_off' }) })
-          .catch(() => addEvent(`Không gửi được lệnh tới ${entityId}`, 'system'))
+          .catch(error => {
+            const message = error instanceof Error ? error.message : String(error)
+            addEvent(`Không gửi được lệnh tới ${entityId}: ${message}`, 'system')
+          })
       })
     }
   }
@@ -430,7 +460,7 @@ export function HomeDashboard() {
     setAuthLoading(true)
     setAuthError('')
     try {
-      const response = await fetch('/api/ha', {
+      const response = await fetch(HA_API_PATH, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -438,22 +468,34 @@ export function HomeDashboard() {
         },
         cache: 'no-store',
       })
+
+      if (response.status === 404) {
+        setAuthError(`Không tìm thấy API ${HA_API_PATH} (404). Kiểm tra lại cấu hình next.config.mjs (không được dùng output: 'export') và đảm bảo file app/api/ha/route.ts tồn tại, sau đó redeploy Vercel.`)
+        setAuthLoading(false)
+        return
+      }
+
       if (response.status === 401) {
         setAuthError('Mật khẩu không chính xác')
         setAuthLoading(false)
         return
       }
+
       if (!response.ok) {
-        setAuthError(`Không kết nối được máy chủ (${response.status})`)
+        const body = await response.json().catch(() => null)
+        const detail = formatErrorDetail(body)
+        setAuthError(`Không kết nối được máy chủ (${response.status})${detail ? `: ${detail}` : ''}`)
         setAuthLoading(false)
         return
       }
+
       const data = await response.json()
       if (!Array.isArray(data?.states)) {
         setAuthError('Máy chủ trả về dữ liệu không hợp lệ')
         setAuthLoading(false)
         return
       }
+
       setAdminPassword(passwordInput)
       setPasswordInput('')
       setLiveConnected(true)
@@ -464,7 +506,8 @@ export function HomeDashboard() {
       } catch (error) {}
       addEvent('Đã xác thực và kết nối Home Assistant', 'system')
     } catch (error) {
-      setAuthError('Không thể kết nối tới máy chủ')
+      const message = error instanceof Error ? error.message : String(error)
+      setAuthError(`Không thể kết nối tới máy chủ: ${message}`)
     } finally {
       setAuthLoading(false)
     }
@@ -587,7 +630,7 @@ export function HomeDashboard() {
                 )
               })}
               <div className="floor-grid" aria-hidden="true" />
-              {pins.map(pin => <PinButton key={pin.id} pin={pin} lights={lights} presence={presence} lux={lux} editMode={editMode} onLight={toggleLight} onPresence={togglePresence} onDragStart={handlePinDragStart} acOn={acOn} onAc={() => { const next = !acOn; setAcOn(next); addEvent(`Điều hòa Daikin ${next ? 'đã bật · 24°C' : 'đã tắt'}`); if (mode === 'live' && liveConnected) { callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.ac, action: next ? 'turn_on' : 'turn_off' }) }).catch(() => addEvent('Không gửi được lệnh điều hòa', 'system')) } }} />)}
+              {pins.map(pin => <PinButton key={pin.id} pin={pin} lights={lights} presence={presence} lux={lux} editMode={editMode} onLight={toggleLight} onPresence={togglePresence} onDragStart={handlePinDragStart} acOn={acOn} onAc={() => { const next = !acOn; setAcOn(next); addEvent(`Điều hòa Daikin ${next ? 'đã bật · 24°C' : 'đã tắt'}`); if (mode === 'live' && liveConnected) { callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.ac, action: next ? 'turn_on' : 'turn_off' }) }).catch(error => { const message = error instanceof Error ? error.message : String(error); addEvent(`Không gửi được lệnh điều hòa: ${message}`, 'system') }) } }} />)}
               <div className="map-compass"><span>N</span><ArrowUpRight size={14} /></div>
               <div className="map-legend"><span><i className="legend-light" /> Đèn đang bật</span><span><i className="legend-presence" /> Có người</span></div>
             </div>
@@ -613,7 +656,7 @@ export function HomeDashboard() {
                   onKeyDown={event => { if (event.key === 'Enter') authenticate() }}
                 />
                 <button className="outline-button" style={{ width: '100%', justifyContent: 'center' }} onClick={authenticate} disabled={authLoading}><Lock size={14} /> {authLoading ? 'Đang xác thực...' : 'Xác thực kết nối'}</button>
-                {authError && <div style={{ color: '#d33', marginTop: '8px', fontSize: '12px' }}>{authError}</div>}
+                {authError && <div style={{ color: '#d33', marginTop: '8px', fontSize: '12px', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{authError}</div>}
               </div>
             )}
             {mode === 'live' && liveConnected && (
@@ -628,7 +671,7 @@ export function HomeDashboard() {
               <div className="environment-item humidity-control"><div className="environment-label"><span><Waves size={14} /> Độ ẩm</span><strong>{humidity}<small>%</small></strong></div><input aria-label="Độ ẩm trong nhà" type="range" min="30" max="95" step="1" value={humidity} onChange={e => setHumidity(Number(e.target.value))} /><div className="range-ends"><span>30%</span><span>95%</span></div></div>
             </section>
             <section className="automation-card"><div className="automation-heading"><div className="automation-icon"><Zap size={16} /></div><div><strong>Tự động hóa thông minh</strong><span>{automation ? 'Đang hoạt động' : 'Đã tạm dừng'}</span></div><button className={`mini-switch ${automation ? 'on' : ''}`} aria-label={`${automation ? 'Tắt' : 'Bật'} tự động hóa`} aria-pressed={automation} onClick={toggleAutomation}><span /></button></div><p>Khi có người &amp; ánh sáng thấp, tự động bật đèn. Trên 29°C sẽ bật điều hòa và quạt.</p></section>
-            <section className="panel-section devices-section"><div className="section-heading"><div><span className="section-icon device-section"><Zap size={15} /></span><h3>Thiết bị nhanh</h3></div><button className="text-action" onClick={() => addEvent('Đã mở danh sách thiết bị')}>Tất cả <ChevronRight size={12} /></button></div><div className="quick-devices"><button className={`device-tile ${acOn ? 'active' : ''}`} onClick={() => { const next = !acOn; setAcOn(next); addEvent(`Điều hòa Daikin ${next ? 'đã bật · 24°C' : 'đã tắt'}`); if (mode === 'live' && liveConnected) { callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.ac, action: next ? 'turn_on' : 'turn_off' }) }).catch(() => addEvent('Không gửi được lệnh điều hòa', 'system')) } }}><span className="tile-icon"><AirVent size={17} /></span><span><strong>Điều hòa</strong><small>{acOn ? '24°C · Đang bật' : 'Daikin · Tắt'}</small></span><ChevronDown size={13} /></button><button className={`device-tile ${fanOn ? 'active' : ''}`} onClick={() => { const next = !fanOn; setFanOn(next); addEvent(`Quạt trần ${next ? 'đã bật' : 'đã tắt'}`); if (mode === 'live' && liveConnected) { callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.fan, action: next ? 'turn_on' : 'turn_off' }) }).catch(() => addEvent('Không gửi được lệnh quạt', 'system')) } }}><span className="tile-icon"><Fan size={17} /></span><span><strong>Quạt trần</strong><small>{fanOn ? 'Đang bật · Mức 2' : 'Phòng khách · Tắt'}</small></span><ChevronDown size={13} /></button></div></section>
+            <section className="panel-section devices-section"><div className="section-heading"><div><span className="section-icon device-section"><Zap size={15} /></span><h3>Thiết bị nhanh</h3></div><button className="text-action" onClick={() => addEvent('Đã mở danh sách thiết bị')}>Tất cả <ChevronRight size={12} /></button></div><div className="quick-devices"><button className={`device-tile ${acOn ? 'active' : ''}`} onClick={() => { const next = !acOn; setAcOn(next); addEvent(`Điều hòa Daikin ${next ? 'đã bật · 24°C' : 'đã tắt'}`); if (mode === 'live' && liveConnected) { callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.ac, action: next ? 'turn_on' : 'turn_off' }) }).catch(error => { const message = error instanceof Error ? error.message : String(error); addEvent(`Không gửi được lệnh điều hòa: ${message}`, 'system') }) } }}><span className="tile-icon"><AirVent size={17} /></span><span><strong>Điều hòa</strong><small>{acOn ? '24°C · Đang bật' : 'Daikin · Tắt'}</small></span><ChevronDown size={13} /></button><button className={`device-tile ${fanOn ? 'active' : ''}`} onClick={() => { const next = !fanOn; setFanOn(next); addEvent(`Quạt trần ${next ? 'đã bật' : 'đã tắt'}`); if (mode === 'live' && liveConnected) { callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.fan, action: next ? 'turn_on' : 'turn_off' }) }).catch(error => { const message = error instanceof Error ? error.message : String(error); addEvent(`Không gửi được lệnh quạt: ${message}`, 'system') }) } }}><span className="tile-icon"><Fan size={17} /></span><span><strong>Quạt trần</strong><small>{fanOn ? 'Đang bật · Mức 2' : 'Phòng khách · Tắt'}</small></span><ChevronDown size={13} /></button></div></section>
             <section className="event-section"><div className="section-heading"><div><span className="section-icon event-section-icon"><Activity size={15} /></span><h3>Nhật ký hoạt động</h3></div><button className="text-action" onClick={() => setEvents([])}>Xóa nhật ký</button></div><div className="event-list">{events.length ? events.map((event, index) => <div className="event-row" key={`${event.time}-${index}`}><span className={`event-dot ${event.type}`} /><span className="event-time">{event.time}</span><p>{event.message}</p></div>) : <p className="empty-events">Chưa có hoạt động mới.</p>}</div></section>
             <div className="panel-footer"><Battery size={13} /> Tất cả cảm biến đang kết nối <span className="footer-healthy"><span /> Tốt</span></div>
           </>}
