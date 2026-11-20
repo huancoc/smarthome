@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
+export const runtime = 'nodejs'
 
 const HA_URL = process.env.HA_URL
 const HA_TOKEN = process.env.HA_TOKEN
@@ -11,9 +12,12 @@ function unauthorized() {
   return NextResponse.json({ error: 'Sai mật khẩu quản trị' }, { status: 401 })
 }
 
-function misconfigured() {
+function misconfigured(missing: string[]) {
   return NextResponse.json(
-    { error: 'Server chưa cấu hình HA_URL / HA_TOKEN / ADMIN_PASSWORD' },
+    {
+      error: `Server chưa cấu hình đủ biến môi trường: ${missing.join(', ')}`,
+      missing,
+    },
     { status: 500 }
   )
 }
@@ -25,16 +29,33 @@ function checkPassword(request: NextRequest): boolean {
   return provided === ADMIN_PASSWORD
 }
 
-export async function GET(request: NextRequest) {
-  if (!HA_URL || !HA_TOKEN || !ADMIN_PASSWORD) {
-    return misconfigured()
+async function readResponseBody(response: Response): Promise<unknown> {
+  const text = await response.text().catch(() => '')
+  if (!text) return null
+  try {
+    return JSON.parse(text)
+  } catch (error) {
+    return text
   }
+}
+
+export async function GET(request: NextRequest) {
+  const missing: string[] = []
+  if (!HA_URL) missing.push('HA_URL')
+  if (!HA_TOKEN) missing.push('HA_TOKEN')
+  if (!ADMIN_PASSWORD) missing.push('ADMIN_PASSWORD')
+  if (missing.length > 0) {
+    return misconfigured(missing)
+  }
+
   if (!checkPassword(request)) {
     return unauthorized()
   }
 
+  const targetUrl = `${HA_URL!.replace(/\/+$/, '')}/api/states`
+
   try {
-    const response = await fetch(`${HA_URL}/api/states`, {
+    const response = await fetch(targetUrl, {
       headers: {
         Authorization: `Bearer ${HA_TOKEN}`,
         'Content-Type': 'application/json',
@@ -43,8 +64,14 @@ export async function GET(request: NextRequest) {
     })
 
     if (!response.ok) {
+      const detail = await readResponseBody(response)
       return NextResponse.json(
-        { error: `Home Assistant trả về lỗi ${response.status}` },
+        {
+          error: `Home Assistant trả về lỗi ${response.status}`,
+          status: response.status,
+          target: targetUrl,
+          detail,
+        },
         { status: response.status }
       )
     }
@@ -52,17 +79,27 @@ export async function GET(request: NextRequest) {
     const states = await response.json()
     return NextResponse.json({ states }, { status: 200 })
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
-      { error: 'Không thể kết nối tới Home Assistant' },
+      {
+        error: 'Không thể kết nối tới Home Assistant',
+        target: targetUrl,
+        detail: message,
+      },
       { status: 502 }
     )
   }
 }
 
 export async function POST(request: NextRequest) {
-  if (!HA_URL || !HA_TOKEN || !ADMIN_PASSWORD) {
-    return misconfigured()
+  const missing: string[] = []
+  if (!HA_URL) missing.push('HA_URL')
+  if (!HA_TOKEN) missing.push('HA_TOKEN')
+  if (!ADMIN_PASSWORD) missing.push('ADMIN_PASSWORD')
+  if (missing.length > 0) {
+    return misconfigured(missing)
   }
+
   if (!checkPassword(request)) {
     return unauthorized()
   }
@@ -88,8 +125,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'entity_id không hợp lệ' }, { status: 400 })
   }
 
+  const targetUrl = `${HA_URL!.replace(/\/+$/, '')}/api/services/${domain}/${action}`
+
   try {
-    const response = await fetch(`${HA_URL}/api/services/${domain}/${action}`, {
+    const response = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${HA_TOKEN}`,
@@ -100,8 +139,16 @@ export async function POST(request: NextRequest) {
     })
 
     if (!response.ok) {
+      const detail = await readResponseBody(response)
       return NextResponse.json(
-        { error: `Home Assistant trả về lỗi ${response.status}` },
+        {
+          error: `Home Assistant trả về lỗi ${response.status}`,
+          status: response.status,
+          target: targetUrl,
+          entity_id,
+          action,
+          detail,
+        },
         { status: response.status }
       )
     }
@@ -109,8 +156,15 @@ export async function POST(request: NextRequest) {
     const result = await response.json().catch(() => ({}))
     return NextResponse.json({ ok: true, result }, { status: 200 })
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
     return NextResponse.json(
-      { error: 'Không thể gửi lệnh tới Home Assistant' },
+      {
+        error: 'Không thể gửi lệnh tới Home Assistant',
+        target: targetUrl,
+        entity_id,
+        action,
+        detail: message,
+      },
       { status: 502 }
     )
   }
