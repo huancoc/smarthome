@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, AirVent, ArrowDownRight, ArrowUpRight, AudioLines, Battery, ChevronDown, ChevronRight, CircleHelp, CloudSun, DoorOpen, Fan, Gauge, Home, Lightbulb, Moon, MoreHorizontal, PanelRightClose, Radio, Settings2, ShieldCheck, Sun, Thermometer, Users, Waves, Wind, Zap } from 'lucide-react'
 
 type RoomKey =
@@ -36,7 +36,7 @@ const roomLightImages: Record<RoomKey, string | null> = {
   denCong: '/floor-plan/den-cong.png',
 }
 
-const pins: Pin[] = [
+const initialPins: Pin[] = [
   { id: 'kho', x: 25, y: 25, title: 'Đèn phòng kho', kind: 'light', room: 'kho' },
   { id: 'bep', x: 25, y: 50, title: 'Đèn bếp', kind: 'light', room: 'bep' },
   { id: 'an', x: 25, y: 66, title: 'Đèn phòng ăn', kind: 'light', room: 'phongAn' },
@@ -77,8 +77,20 @@ const initialPresence: Record<SensorKey, boolean> = { bathroom: false, living: t
 
 function timeLabel() { return new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date()) }
 
+function pinsToCode(pins: Pin[]) {
+  const lines = pins.map(pin => {
+    const parts: string[] = [`id: '${pin.id}'`, `x: ${pin.x}`, `y: ${pin.y}`, `title: '${pin.title.replace(/'/g, "\\'")}'`, `kind: '${pin.kind}'`]
+    if (pin.room) parts.push(`room: '${pin.room}'`)
+    if (pin.sensor) parts.push(`sensor: '${pin.sensor}'`)
+    if (pin.detail) parts.push(`detail: '${pin.detail.replace(/'/g, "\\'")}'`)
+    return `  { ${parts.join(', ')} },`
+  })
+  return `const pins: Pin[] = [\n${lines.join('\n')}\n]`
+}
+
 export function HomeDashboard() {
   const [mode, setMode] = useState<'demo' | 'live'>('demo')
+  const [pins, setPins] = useState<Pin[]>(initialPins)
   const [lights, setLights] = useState(initialLights)
   const [presence, setPresence] = useState(initialPresence)
   const [distances, setDistances] = useState(initialDistances)
@@ -89,8 +101,12 @@ export function HomeDashboard() {
   const [acOn, setAcOn] = useState(false)
   const [fanOn, setFanOn] = useState(false)
   const [panelOpen, setPanelOpen] = useState(true)
+  const [editMode, setEditMode] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [events, setEvents] = useState([{ time: '14:02:10', message: 'LD2410 Phòng khách phát hiện người (1.8m) + Trời tối → Bật đèn phòng khách', type: 'auto' }, { time: '14:01:42', message: 'Hệ thống nhà thông minh đã sẵn sàng', type: 'system' }, { time: '13:58:06', message: 'Cảm biến sân vườn cập nhật 126 Lux', type: 'sensor' }])
   const isDay = lux > 300
+  const floorCanvasRef = useRef<HTMLDivElement | null>(null)
+  const dragStateRef = useRef<{ id: string | null }>({ id: null })
   const addEvent = (message: string, type: 'auto' | 'manual' | 'sensor' = 'manual') => setEvents(current => [{ time: timeLabel(), message, type }, ...current].slice(0, 8))
   const toggleLight = (room: RoomKey, title: string) => {
     const next = !lights[room]
@@ -149,6 +165,64 @@ export function HomeDashboard() {
   const summary = useMemo(() => `${Object.values(lights).filter(Boolean).length} thiết bị đang hoạt động`, [lights])
   const allLightsOn = useMemo(() => Object.values(lights).every(Boolean), [lights])
 
+  const updatePinPosition = useCallback((id: string, clientX: number, clientY: number) => {
+    const canvas = floorCanvasRef.current
+    if (!canvas) return
+    const rect = canvas.getBoundingClientRect()
+    const x = Math.min(100, Math.max(0, ((clientX - rect.left) / rect.width) * 100))
+    const y = Math.min(100, Math.max(0, ((clientY - rect.top) / rect.height) * 100))
+    setPins(current => current.map(pin => pin.id === id ? { ...pin, x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 } : pin))
+  }, [])
+
+  useEffect(() => {
+    if (!editMode) return
+    const handleMove = (event: PointerEvent) => {
+      const id = dragStateRef.current.id
+      if (!id) return
+      updatePinPosition(id, event.clientX, event.clientY)
+    }
+    const handleUp = () => { dragStateRef.current.id = null }
+    window.addEventListener('pointermove', handleMove)
+    window.addEventListener('pointerup', handleUp)
+    window.addEventListener('pointercancel', handleUp)
+    return () => {
+      window.removeEventListener('pointermove', handleMove)
+      window.removeEventListener('pointerup', handleUp)
+      window.removeEventListener('pointercancel', handleUp)
+    }
+  }, [editMode, updatePinPosition])
+
+  const handlePinDragStart = (event: React.PointerEvent<HTMLButtonElement>, id: string) => {
+    if (!editMode) return
+    event.preventDefault()
+    event.stopPropagation()
+    dragStateRef.current.id = id
+    updatePinPosition(id, event.clientX, event.clientY)
+  }
+
+  const copyPinsCode = async () => {
+    const code = pinsToCode(pins)
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(code)
+      } else {
+        const textarea = document.createElement('textarea')
+        textarea.value = code
+        textarea.style.position = 'fixed'
+        textarea.style.opacity = '0'
+        document.body.appendChild(textarea)
+        textarea.select()
+        document.execCommand('copy')
+        document.body.removeChild(textarea)
+      }
+      setCopied(true)
+      addEvent('Đã copy tọa độ pins mới vào clipboard', 'manual')
+      setTimeout(() => setCopied(false), 2000)
+    } catch (error) {
+      addEvent('Không thể copy tọa độ, vui lòng copy thủ công', 'manual')
+    }
+  }
+
   return (
     <main className="dashboard-shell">
       <header className="topbar">
@@ -168,8 +242,8 @@ export function HomeDashboard() {
           </div>
 
           <section className="floor-card" aria-label="Sơ đồ mặt bằng tương tác">
-            <div className="floor-header"><div><div className="floor-title"><h2>Sơ đồ mặt bằng</h2><span className="live-pill"><span /> TRỰC TIẾP</span></div><p>Chọn thiết bị trên bản đồ để điều khiển</p></div><div className="floor-tools"><span className="floor-location"><Home size={13} /> Tầng trệt</span><button className="dots-button" aria-label="Thêm tùy chọn"><MoreHorizontal size={19} /></button></div></div>
-            <div className="floor-canvas">
+            <div className="floor-header"><div><div className="floor-title"><h2>Sơ đồ mặt bằng</h2><span className="live-pill"><span /> TRỰC TIẾP</span></div><p>Chọn thiết bị trên bản đồ để điều khiển</p></div><div className="floor-tools"><span className="floor-location"><Home size={13} /> Tầng trệt</span>{editMode && <button className="outline-button" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={copyPinsCode}>{copied ? 'Đã copy!' : 'Copy tọa độ'}</button>}<button className={`outline-button ${editMode ? 'is-active' : ''}`} style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => { const next = !editMode; setEditMode(next); addEvent(next ? 'Đã bật chế độ chỉnh tọa độ pins' : 'Đã tắt chế độ chỉnh tọa độ pins', 'manual') }}>{editMode ? 'Xong' : 'Chỉnh tọa độ'}</button><button className="dots-button" aria-label="Thêm tùy chọn"><MoreHorizontal size={19} /></button></div></div>
+            <div className={`floor-canvas ${editMode ? 'is-editing' : ''}`} ref={floorCanvasRef}>
               <img className="floor-image" src={floorImage} alt="Sơ đồ 3D nhìn từ trên xuống của ngôi nhà, gồm phòng khách, nhà bếp, phòng ngủ và sân vườn" />
               <div className="floor-vignette" />
               {isDay && (
@@ -234,11 +308,11 @@ export function HomeDashboard() {
                 )
               })}
               <div className="floor-grid" aria-hidden="true" />
-              {pins.map(pin => <PinButton key={pin.id} pin={pin} lights={lights} presence={presence} lux={lux} onLight={toggleLight} onPresence={togglePresence} acOn={acOn} onAc={() => { setAcOn(!acOn); addEvent(`Điều hòa Daikin ${!acOn ? 'đã bật · 24°C' : 'đã tắt'}`) }} />)}
+              {pins.map(pin => <PinButton key={pin.id} pin={pin} lights={lights} presence={presence} lux={lux} editMode={editMode} onLight={toggleLight} onPresence={togglePresence} onDragStart={handlePinDragStart} acOn={acOn} onAc={() => { setAcOn(!acOn); addEvent(`Điều hòa Daikin ${!acOn ? 'đã bật · 24°C' : 'đã tắt'}`) }} />)}
               <div className="map-compass"><span>N</span><ArrowUpRight size={14} /></div>
               <div className="map-legend"><span><i className="legend-light" /> Đèn đang bật</span><span><i className="legend-presence" /> Có người</span></div>
             </div>
-            <div className="floor-footer"><span><Radio size={13} /> 12 thiết bị <b>·</b> 4 cảm biến</span><span>Cập nhật lần cuối: vừa xong <span className="sync-mark"><Activity size={13} /></span></span></div>
+            <div className="floor-footer"><span><Radio size={13} /> 12 thiết bị <b>·</b> 4 cảm biến</span><span>{editMode ? 'Chế độ chỉnh tọa độ: kéo thả pin để di chuyển' : 'Cập nhật lần cuối: vừa xong'} <span className="sync-mark"><Activity size={13} /></span></span></div>
           </section>
           <div className="bottom-note"><ShieldCheck size={14} /> Hệ thống được bảo vệ <span>·</span> Đồng bộ lần cuối 14:02:10</div>
         </div>
@@ -267,10 +341,10 @@ export function HomeDashboard() {
   )
 }
 
-function PinButton({ pin, lights, presence, lux, onLight, onPresence, acOn, onAc }: { pin: Pin; lights: Record<RoomKey, boolean>; presence: Record<SensorKey, boolean>; lux: number; onLight: (room: RoomKey, title: string) => void; onPresence: (sensor: SensorKey) => void; acOn: boolean; onAc: () => void }) {
+function PinButton({ pin, lights, presence, lux, editMode, onLight, onPresence, onDragStart, acOn, onAc }: { pin: Pin; lights: Record<RoomKey, boolean>; presence: Record<SensorKey, boolean>; lux: number; editMode: boolean; onLight: (room: RoomKey, title: string) => void; onPresence: (sensor: SensorKey) => void; onDragStart: (event: React.PointerEvent<HTMLButtonElement>, id: string) => void; acOn: boolean; onAc: () => void }) {
   const active = pin.room ? lights[pin.room] : pin.sensor ? presence[pin.sensor] : pin.id === 'bedroom-climate' ? acOn : false
   const icon = pin.kind === 'light' ? <Lightbulb size={13} /> : pin.kind === 'sensor' ? <Users size={13} /> : pin.kind === 'climate' ? <Thermometer size={13} /> : pin.kind === 'door' ? <DoorOpen size={13} /> : pin.kind === 'weather' ? <CloudSun size={13} /> : lux > 300 ? <Sun size={13} /> : <Moon size={13} />
   const detail = pin.sensor ? `${presence[pin.sensor] ? 'Có người · ' : 'Trống · '}${pin.sensor === 'living' ? '1.8' : '1.2'} m` : pin.id === 'ambient' ? `${lux} Lux` : pin.id === 'bedroom-climate' ? `${acOn ? '24° · Đang bật' : '27.1° · 64%'}` : pin.detail
-  const click = () => { if (pin.room) onLight(pin.room, pin.title); else if (pin.sensor) onPresence(pin.sensor); else if (pin.id === 'bedroom-climate') onAc() }
-  return <button type="button" className={`map-pin pin-${pin.kind} ${active ? 'pin-active' : ''} ${pin.sensor && active ? 'pin-detected' : ''} pin-${pin.id}`} style={{ left: `${pin.x}%`, top: `${pin.y}%` }} onClick={click} aria-label={`${pin.title}${detail ? `, ${detail}` : ''}${pin.room || pin.sensor || pin.id === 'bedroom-climate' ? ', nhấn để điều khiển' : ''}`} aria-pressed={pin.room || pin.sensor || pin.id === 'bedroom-climate' ? active : undefined} title={pin.title}><span className="pin-icon">{icon}</span><span className="pin-copy"><strong>{pin.title}</strong>{detail && <small>{detail}</small>}</span>{active && pin.kind === 'light' && <span className="pin-status" />}</button>
+  const click = () => { if (editMode) return; if (pin.room) onLight(pin.room, pin.title); else if (pin.sensor) onPresence(pin.sensor); else if (pin.id === 'bedroom-climate') onAc() }
+  return <button type="button" className={`map-pin pin-${pin.kind} ${active ? 'pin-active' : ''} ${pin.sensor && active ? 'pin-detected' : ''} ${editMode ? 'pin-editable' : ''} pin-${pin.id}`} style={{ left: `${pin.x}%`, top: `${pin.y}%`, cursor: editMode ? 'grab' : undefined, touchAction: editMode ? 'none' : undefined }} onClick={click} onPointerDown={event => onDragStart(event, pin.id)} aria-label={`${pin.title}${detail ? `, ${detail}` : ''}${editMode ? ', kéo để di chuyển' : pin.room || pin.sensor || pin.id === 'bedroom-climate' ? ', nhấn để điều khiển' : ''}`} aria-pressed={pin.room || pin.sensor || pin.id === 'bedroom-climate' ? active : undefined} title={editMode ? `${pin.title} · x: ${pin.x}, y: ${pin.y}` : pin.title}><span className="pin-icon">{icon}</span><span className="pin-copy"><strong>{pin.title}</strong>{detail && <small>{detail}</small>}{editMode && <small className="pin-coords">{pin.x}% · {pin.y}%</small>}</span>{active && pin.kind === 'light' && <span className="pin-status" />}</button>
 }
