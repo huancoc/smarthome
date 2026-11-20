@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Activity, AirVent, ArrowDownRight, ArrowUpRight, AudioLines, Battery, ChevronDown, ChevronRight, CircleHelp, CloudSun, DoorOpen, Fan, Gauge, Home, Lightbulb, Moon, MoreHorizontal, PanelRightClose, Radio, Settings2, ShieldCheck, Sun, Thermometer, Users, Waves, Wind, Zap } from 'lucide-react'
+import { Activity, AirVent, ArrowDownRight, ArrowUpRight, AudioLines, Battery, ChevronDown, ChevronRight, CircleHelp, CloudSun, DoorOpen, Fan, Gauge, Home, Lightbulb, Lock, Moon, MoreHorizontal, PanelRightClose, Radio, Settings2, ShieldCheck, Sun, Thermometer, Users, Waves, Wind, Zap } from 'lucide-react'
 
 type RoomKey =
   | 'kho'
@@ -21,6 +21,43 @@ type RoomKey =
   | 'denCong'
 type SensorKey = 'bathroom' | 'living' | 'bedroom'
 type Pin = { id: string; x: number; y: number; title: string; kind: 'light' | 'sensor' | 'climate' | 'door' | 'weather' | 'ambient'; room?: RoomKey; sensor?: SensorKey; detail?: string }
+type Mode = 'demo' | 'live'
+type HAState = { entity_id: string; state: string; attributes?: Record<string, unknown> }
+
+const ENTITY_MAP = {
+  lights: {
+    kho: 'light.kho',
+    bep: 'light.bep',
+    phongAn: 'light.phong_an',
+    veSinh: 'light.ve_sinh',
+    khach: 'light.phong_khach',
+    hienTrai: 'light.hien_trai',
+    hienPhai: 'light.hien_phai',
+    sanBe: 'light.san_be',
+    cuaBuong: 'light.cua_buong',
+    denTranh: 'light.den_tranh',
+    warmDownlight: 'light.downlight_vang',
+    whiteDownlight: 'light.downlight_trang',
+    yeelightPN: 'light.yeelight_pn',
+    sanVuon: 'light.san_vuon',
+    denCong: 'light.den_cong',
+  } as Record<RoomKey, string>,
+  sensors: {
+    livingPresence: 'binary_sensor.ld2410_khach',
+    livingDistance: 'sensor.ld2410_khach_distance',
+    bathroomPresence: 'binary_sensor.ld2410_wc',
+    bathroomDistance: 'sensor.ld2410_wc_distance',
+    bedroomPresence: 'binary_sensor.ld2410_ngu',
+    bedroomDistance: 'sensor.ld2410_ngu_distance',
+    lux: 'sensor.cam_bien_anh_sang',
+    temperature: 'sensor.nhiet_do_khach',
+    humidity: 'sensor.do_am_khach',
+  },
+  climate: {
+    ac: 'climate.daikin',
+    fan: 'fan.quat_tran',
+  },
+}
 
 const floorImage = '/floor-plan/bg.jpg'
 
@@ -102,7 +139,12 @@ function pinsToCode(pins: Pin[]) {
 }
 
 export function HomeDashboard() {
-  const [mode, setMode] = useState<'demo' | 'live'>('demo')
+  const [mode, setMode] = useState<Mode>('demo')
+  const [adminPassword, setAdminPassword] = useState('')
+  const [passwordInput, setPasswordInput] = useState('')
+  const [authError, setAuthError] = useState('')
+  const [authLoading, setAuthLoading] = useState(false)
+  const [liveConnected, setLiveConnected] = useState(false)
   const [pins, setPins] = useState<Pin[]>(initialPins)
   const [lights, setLights] = useState(initialLights)
   const [presence, setPresence] = useState(initialPresence)
@@ -120,11 +162,134 @@ export function HomeDashboard() {
   const isDay = lux > 300
   const floorCanvasRef = useRef<HTMLDivElement | null>(null)
   const dragStateRef = useRef<{ id: string | null }>({ id: null })
-  const addEvent = (message: string, type: 'auto' | 'manual' | 'sensor' = 'manual') => setEvents(current => [{ time: timeLabel(), message, type }, ...current].slice(0, 8))
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const addEvent = (message: string, type: 'auto' | 'manual' | 'sensor' | 'system' = 'manual') => setEvents(current => [{ time: timeLabel(), message, type }, ...current].slice(0, 8))
+
+  const callHA = useCallback(async (init?: RequestInit & { password?: string }) => {
+    const password = init?.password ?? adminPassword
+    if (!password) throw new Error('Chưa có mật khẩu')
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-admin-password': password,
+      ...(init?.headers as Record<string, string> | undefined),
+    }
+    const response = await fetch('/api/ha', { ...init, headers, cache: 'no-store' })
+    return response
+  }, [adminPassword])
+
+  const applyStates = useCallback((states: HAState[]) => {
+    const byId = new Map<string, HAState>()
+    states.forEach(state => byId.set(state.entity_id, state))
+
+    const readBool = (entityId: string): boolean | null => {
+      const state = byId.get(entityId)
+      if (!state) return null
+      return state.state === 'on'
+    }
+    const readNumber = (entityId: string): number | null => {
+      const state = byId.get(entityId)
+      if (!state) return null
+      const value = Number(state.state)
+      return Number.isFinite(value) ? value : null
+    }
+
+    setLights(previous => {
+      const updated = { ...previous }
+      ;(Object.keys(ENTITY_MAP.lights) as RoomKey[]).forEach(room => {
+        const value = readBool(ENTITY_MAP.lights[room])
+        if (value !== null) updated[room] = value
+      })
+      return updated
+    })
+
+    const livingPresence = readBool(ENTITY_MAP.sensors.livingPresence)
+    const bathroomPresence = readBool(ENTITY_MAP.sensors.bathroomPresence)
+    const bedroomPresence = readBool(ENTITY_MAP.sensors.bedroomPresence)
+    setPresence(previous => ({
+      living: livingPresence ?? previous.living,
+      bathroom: bathroomPresence ?? previous.bathroom,
+      bedroom: bedroomPresence ?? previous.bedroom,
+    }))
+
+    const livingDistance = readNumber(ENTITY_MAP.sensors.livingDistance)
+    const bathroomDistance = readNumber(ENTITY_MAP.sensors.bathroomDistance)
+    const bedroomDistance = readNumber(ENTITY_MAP.sensors.bedroomDistance)
+    setDistances(previous => ({
+      living: livingDistance ?? previous.living,
+      bathroom: bathroomDistance ?? previous.bathroom,
+      bedroom: bedroomDistance ?? previous.bedroom,
+    }))
+
+    const luxValue = readNumber(ENTITY_MAP.sensors.lux)
+    if (luxValue !== null) setLux(Math.round(luxValue))
+
+    const temperatureValue = readNumber(ENTITY_MAP.sensors.temperature)
+    if (temperatureValue !== null) setTemperature(Number(temperatureValue.toFixed(1)))
+
+    const humidityValue = readNumber(ENTITY_MAP.sensors.humidity)
+    if (humidityValue !== null) setHumidity(Math.round(humidityValue))
+
+    const acValue = readBool(ENTITY_MAP.climate.ac)
+    if (acValue !== null) setAcOn(acValue)
+    const fanValue = readBool(ENTITY_MAP.climate.fan)
+    if (fanValue !== null) setFanOn(fanValue)
+  }, [])
+
+  const syncFromHA = useCallback(async (silent = false) => {
+    if (!adminPassword) return
+    try {
+      const response = await callHA({ method: 'GET', password: adminPassword })
+      if (response.status === 401) {
+        setLiveConnected(false)
+        setAdminPassword('')
+        setMode('demo')
+        addEvent('Mật khẩu quản trị không còn hiệu lực, đã chuyển về chế độ Giả lập', 'system')
+        return
+      }
+      if (!response.ok) {
+        if (!silent) addEvent(`Đồng bộ HA thất bại (${response.status})`, 'system')
+        return
+      }
+      const data = await response.json()
+      if (Array.isArray(data?.states)) {
+        applyStates(data.states as HAState[])
+        if (!silent) addEvent('Đã đồng bộ trạng thái từ Home Assistant', 'sensor')
+      }
+    } catch (error) {
+      if (!silent) addEvent('Không thể kết nối Home Assistant', 'system')
+    }
+  }, [adminPassword, callHA, applyStates])
+
+  useEffect(() => {
+    if (mode !== 'live' || !liveConnected) {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+      return
+    }
+    syncFromHA(true)
+    pollingRef.current = setInterval(() => { syncFromHA(true) }, 3000)
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
+      }
+    }
+  }, [mode, liveConnected, syncFromHA])
+
   const toggleLight = (room: RoomKey, title: string) => {
     const next = !lights[room]
     setLights(previous => ({ ...previous, [room]: next }))
     addEvent(`${title} · ${next ? 'Đã bật' : 'Đã tắt'} đèn`, 'manual')
+    if (mode === 'live' && liveConnected) {
+      const entityId = ENTITY_MAP.lights[room]
+      callHA({ method: 'POST', body: JSON.stringify({ entity_id: entityId, action: next ? 'turn_on' : 'turn_off' }) })
+        .then(response => {
+          if (!response.ok) addEvent(`HA từ chối lệnh cho ${entityId}`, 'system')
+        })
+        .catch(() => addEvent(`Không gửi được lệnh tới ${entityId}`, 'system'))
+    }
   }
   const toggleAllLights = () => {
     const anyOff = Object.values(lights).some(value => !value)
@@ -135,6 +300,13 @@ export function HomeDashboard() {
       return updated
     })
     addEvent(next ? 'Đã bật tất cả đèn' : 'Đã tắt tất cả đèn', 'manual')
+    if (mode === 'live' && liveConnected) {
+      ;(Object.keys(ENTITY_MAP.lights) as RoomKey[]).forEach(room => {
+        const entityId = ENTITY_MAP.lights[room]
+        callHA({ method: 'POST', body: JSON.stringify({ entity_id: entityId, action: next ? 'turn_on' : 'turn_off' }) })
+          .catch(() => addEvent(`Không gửi được lệnh tới ${entityId}`, 'system'))
+      })
+    }
   }
   const togglePresence = (sensor: SensorKey) => {
     const next = !presence[sensor]
@@ -145,6 +317,9 @@ export function HomeDashboard() {
       const light: RoomKey = sensor === 'living' ? 'khach' : sensor === 'bathroom' ? 'veSinh' : 'warmDownlight'
       setLights(previous => ({ ...previous, [light]: true }))
       addEvent(`Trời tối (${lux} Lux) → Tự động bật đèn ${room}`, 'auto')
+      if (mode === 'live' && liveConnected) {
+        callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.lights[light], action: 'turn_on' }) }).catch(() => {})
+      }
     }
     if (automation && next && sensor === 'bedroom' && lux < 150) {
       addEvent(`LD2410 Phòng ngủ phát hiện chuyển động → Tự động bật Downlight vàng`, 'auto')
@@ -152,6 +327,10 @@ export function HomeDashboard() {
     if (automation && next && temperature > 29) {
       setAcOn(true); setFanOn(true)
       addEvent(`Nhiệt độ ${temperature}°C → Bật điều hòa 24°C và quạt trần`, 'auto')
+      if (mode === 'live' && liveConnected) {
+        callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.ac, action: 'turn_on' }) }).catch(() => {})
+        callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.fan, action: 'turn_on' }) }).catch(() => {})
+      }
     }
   }
   const updateLux = (value: number) => {
@@ -243,6 +422,86 @@ export function HomeDashboard() {
     }
   }
 
+  const authenticate = async () => {
+    if (!passwordInput.trim()) {
+      setAuthError('Vui lòng nhập mật khẩu quản trị')
+      return
+    }
+    setAuthLoading(true)
+    setAuthError('')
+    try {
+      const response = await fetch('/api/ha', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-password': passwordInput,
+        },
+        cache: 'no-store',
+      })
+      if (response.status === 401) {
+        setAuthError('Mật khẩu không chính xác')
+        setAuthLoading(false)
+        return
+      }
+      if (!response.ok) {
+        setAuthError(`Không kết nối được máy chủ (${response.status})`)
+        setAuthLoading(false)
+        return
+      }
+      const data = await response.json()
+      if (!Array.isArray(data?.states)) {
+        setAuthError('Máy chủ trả về dữ liệu không hợp lệ')
+        setAuthLoading(false)
+        return
+      }
+      setAdminPassword(passwordInput)
+      setPasswordInput('')
+      setLiveConnected(true)
+      setMode('live')
+      applyStates(data.states as HAState[])
+      try {
+        if (typeof window !== 'undefined') window.sessionStorage.setItem('ha_admin_password', passwordInput)
+      } catch (error) {}
+      addEvent('Đã xác thực và kết nối Home Assistant', 'system')
+    } catch (error) {
+      setAuthError('Không thể kết nối tới máy chủ')
+    } finally {
+      setAuthLoading(false)
+    }
+  }
+
+  const handleSelectLive = () => {
+    setAuthError('')
+    if (liveConnected && adminPassword) {
+      setMode('live')
+      addEvent('Đã chuyển sang chế độ Kết nối thực tế', 'system')
+      return
+    }
+    setMode('live')
+  }
+
+  const handleSelectDemo = () => {
+    setMode('demo')
+    setLiveConnected(false)
+    setAdminPassword('')
+    setPasswordInput('')
+    setAuthError('')
+    try {
+      if (typeof window !== 'undefined') window.sessionStorage.removeItem('ha_admin_password')
+    } catch (error) {}
+    addEvent('Đã chuyển sang chế độ Giả lập')
+  }
+
+  useEffect(() => {
+    try {
+      if (typeof window === 'undefined') return
+      const stored = window.sessionStorage.getItem('ha_admin_password')
+      if (!stored) return
+      setAdminPassword(stored)
+      setLiveConnected(true)
+    } catch (error) {}
+  }, [])
+
   return (
     <main className="dashboard-shell">
       <header className="topbar">
@@ -328,7 +587,7 @@ export function HomeDashboard() {
                 )
               })}
               <div className="floor-grid" aria-hidden="true" />
-              {pins.map(pin => <PinButton key={pin.id} pin={pin} lights={lights} presence={presence} lux={lux} editMode={editMode} onLight={toggleLight} onPresence={togglePresence} onDragStart={handlePinDragStart} acOn={acOn} onAc={() => { setAcOn(!acOn); addEvent(`Điều hòa Daikin ${!acOn ? 'đã bật · 24°C' : 'đã tắt'}`) }} />)}
+              {pins.map(pin => <PinButton key={pin.id} pin={pin} lights={lights} presence={presence} lux={lux} editMode={editMode} onLight={toggleLight} onPresence={togglePresence} onDragStart={handlePinDragStart} acOn={acOn} onAc={() => { const next = !acOn; setAcOn(next); addEvent(`Điều hòa Daikin ${next ? 'đã bật · 24°C' : 'đã tắt'}`); if (mode === 'live' && liveConnected) { callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.ac, action: next ? 'turn_on' : 'turn_off' }) }).catch(() => addEvent('Không gửi được lệnh điều hòa', 'system')) } }} />)}
               <div className="map-compass"><span>N</span><ArrowUpRight size={14} /></div>
               <div className="map-legend"><span><i className="legend-light" /> Đèn đang bật</span><span><i className="legend-presence" /> Có người</span></div>
             </div>
@@ -340,8 +599,26 @@ export function HomeDashboard() {
         <aside className={`control-panel ${panelOpen ? '' : 'is-collapsed'}`}>
           <div className="panel-heading"><div><div className="panel-kicker">BẢNG ĐIỀU KHIỂN</div><h2>Điều khiển nhà</h2></div><button className="panel-collapse" onClick={() => setPanelOpen(!panelOpen)} aria-label={panelOpen ? 'Thu gọn bảng điều khiển' : 'Mở bảng điều khiển'}>{panelOpen ? <PanelRightClose size={17} /> : <ChevronDown size={17} />}</button></div>
           {panelOpen && <>
-            <div className="mode-switch"><button className={mode === 'demo' ? 'selected' : ''} onClick={() => { setMode('demo'); addEvent('Đã chuyển sang chế độ giả lập') }}><span className="mode-dot demo-dot" /> Giả lập</button><button className={mode === 'live' ? 'selected' : ''} onClick={() => { setMode('live'); addEvent('Chế độ kết nối thực tế đang chờ cấu hình API') }}><span className="mode-dot live-dot" /> Kết nối thực tế</button></div>
-            {mode === 'live' && <div className="live-notice"><Radio size={14} /> Chế độ thực tế cần kết nối Home Assistant API.</div>}
+            <div className="mode-switch"><button className={mode === 'demo' ? 'selected' : ''} onClick={handleSelectDemo}><span className="mode-dot demo-dot" /> Giả lập</button><button className={mode === 'live' ? 'selected' : ''} onClick={handleSelectLive}><span className="mode-dot live-dot" /> Kết nối thực tế</button></div>
+            {mode === 'live' && !liveConnected && (
+              <div className="live-notice" style={{ display: 'block' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '8px' }}><Lock size={14} /> Nhập mật khẩu quản trị để kết nối Home Assistant</div>
+                <input
+                  type="password"
+                  value={passwordInput}
+                  onChange={event => setPasswordInput(event.target.value)}
+                  placeholder="Mật khẩu quản trị"
+                  aria-label="Mật khẩu quản trị"
+                  style={{ width: '100%', padding: '8px 10px', borderRadius: '8px', border: '1px solid rgba(0,0,0,0.15)', marginBottom: '8px', fontSize: '13px' }}
+                  onKeyDown={event => { if (event.key === 'Enter') authenticate() }}
+                />
+                <button className="outline-button" style={{ width: '100%', justifyContent: 'center' }} onClick={authenticate} disabled={authLoading}><Lock size={14} /> {authLoading ? 'Đang xác thực...' : 'Xác thực kết nối'}</button>
+                {authError && <div style={{ color: '#d33', marginTop: '8px', fontSize: '12px' }}>{authError}</div>}
+              </div>
+            )}
+            {mode === 'live' && liveConnected && (
+              <div className="live-notice"><Radio size={14} /> Đã kết nối Home Assistant · Đồng bộ mỗi 3 giây.</div>
+            )}
             <section className="panel-section sensors-section"><div className="section-heading"><div><span className="section-icon"><Users size={15} /></span><h3>Cảm biến hiện diện</h3></div><span className="device-count">LD2410 <span>· 3</span></span></div>
               {(['living', 'bathroom', 'bedroom'] as SensorKey[]).map(sensor => { const living = sensor === 'living'; const bedroom = sensor === 'bedroom'; const name = living ? 'Phòng khách' : bedroom ? 'Phòng ngủ' : 'Nhà vệ sinh'; const energyCaption = living ? 'Tĩnh 38 · Động 72' : bedroom ? 'Tĩnh 22 · Động 58' : 'Tĩnh 12 · Động 04'; return <div className="presence-card" key={sensor}><div className="presence-top"><div className={`presence-symbol ${presence[sensor] ? 'detected' : ''}`}><Users size={15} /></div><div className="presence-name"><strong>{name}</strong><span>{presence[sensor] ? 'Đang phát hiện người' : 'Không có người'}</span></div><button className={`mini-switch ${presence[sensor] ? 'on' : ''}`} aria-label={`${presence[sensor] ? 'Tắt' : 'Bật'} cảm biến ${name}`} aria-pressed={presence[sensor]} onClick={() => togglePresence(sensor)}><span /></button></div><div className="distance-row"><span>Khoảng cách</span><strong>{distances[sensor].toFixed(1)} <small>m</small></strong></div><input aria-label={`Khoảng cách ${name}`} type="range" min="0" max="6" step="0.1" value={distances[sensor]} onChange={e => setDistances(previous => ({ ...previous, [sensor]: Number(e.target.value) }))} /><div className="energy-bars"><span>Năng lượng</span><div className="bar-group" aria-label="Năng lượng đứng yên 38 phần trăm, chuyển động 72 phần trăm"><i className="bar-still" /><i className="bar-still" /><i className="bar-still" /><i className="bar-moving" /><i className="bar-moving" /><i className="bar-moving" /><i /><i /><i /><i /></div><span className="energy-caption">{energyCaption}</span></div></div> })}
             </section>
@@ -351,7 +628,7 @@ export function HomeDashboard() {
               <div className="environment-item humidity-control"><div className="environment-label"><span><Waves size={14} /> Độ ẩm</span><strong>{humidity}<small>%</small></strong></div><input aria-label="Độ ẩm trong nhà" type="range" min="30" max="95" step="1" value={humidity} onChange={e => setHumidity(Number(e.target.value))} /><div className="range-ends"><span>30%</span><span>95%</span></div></div>
             </section>
             <section className="automation-card"><div className="automation-heading"><div className="automation-icon"><Zap size={16} /></div><div><strong>Tự động hóa thông minh</strong><span>{automation ? 'Đang hoạt động' : 'Đã tạm dừng'}</span></div><button className={`mini-switch ${automation ? 'on' : ''}`} aria-label={`${automation ? 'Tắt' : 'Bật'} tự động hóa`} aria-pressed={automation} onClick={toggleAutomation}><span /></button></div><p>Khi có người &amp; ánh sáng thấp, tự động bật đèn. Trên 29°C sẽ bật điều hòa và quạt.</p></section>
-            <section className="panel-section devices-section"><div className="section-heading"><div><span className="section-icon device-section"><Zap size={15} /></span><h3>Thiết bị nhanh</h3></div><button className="text-action" onClick={() => addEvent('Đã mở danh sách thiết bị')}>Tất cả <ChevronRight size={12} /></button></div><div className="quick-devices"><button className={`device-tile ${acOn ? 'active' : ''}`} onClick={() => { setAcOn(!acOn); addEvent(`Điều hòa Daikin ${!acOn ? 'đã bật · 24°C' : 'đã tắt'}`) }}><span className="tile-icon"><AirVent size={17} /></span><span><strong>Điều hòa</strong><small>{acOn ? '24°C · Đang bật' : 'Daikin · Tắt'}</small></span><ChevronDown size={13} /></button><button className={`device-tile ${fanOn ? 'active' : ''}`} onClick={() => { setFanOn(!fanOn); addEvent(`Quạt trần ${!fanOn ? 'đã bật' : 'đã tắt'}`) }}><span className="tile-icon"><Fan size={17} /></span><span><strong>Quạt trần</strong><small>{fanOn ? 'Đang bật · Mức 2' : 'Phòng khách · Tắt'}</small></span><ChevronDown size={13} /></button></div></section>
+            <section className="panel-section devices-section"><div className="section-heading"><div><span className="section-icon device-section"><Zap size={15} /></span><h3>Thiết bị nhanh</h3></div><button className="text-action" onClick={() => addEvent('Đã mở danh sách thiết bị')}>Tất cả <ChevronRight size={12} /></button></div><div className="quick-devices"><button className={`device-tile ${acOn ? 'active' : ''}`} onClick={() => { const next = !acOn; setAcOn(next); addEvent(`Điều hòa Daikin ${next ? 'đã bật · 24°C' : 'đã tắt'}`); if (mode === 'live' && liveConnected) { callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.ac, action: next ? 'turn_on' : 'turn_off' }) }).catch(() => addEvent('Không gửi được lệnh điều hòa', 'system')) } }}><span className="tile-icon"><AirVent size={17} /></span><span><strong>Điều hòa</strong><small>{acOn ? '24°C · Đang bật' : 'Daikin · Tắt'}</small></span><ChevronDown size={13} /></button><button className={`device-tile ${fanOn ? 'active' : ''}`} onClick={() => { const next = !fanOn; setFanOn(next); addEvent(`Quạt trần ${next ? 'đã bật' : 'đã tắt'}`); if (mode === 'live' && liveConnected) { callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.fan, action: next ? 'turn_on' : 'turn_off' }) }).catch(() => addEvent('Không gửi được lệnh quạt', 'system')) } }}><span className="tile-icon"><Fan size={17} /></span><span><strong>Quạt trần</strong><small>{fanOn ? 'Đang bật · Mức 2' : 'Phòng khách · Tắt'}</small></span><ChevronDown size={13} /></button></div></section>
             <section className="event-section"><div className="section-heading"><div><span className="section-icon event-section-icon"><Activity size={15} /></span><h3>Nhật ký hoạt động</h3></div><button className="text-action" onClick={() => setEvents([])}>Xóa nhật ký</button></div><div className="event-list">{events.length ? events.map((event, index) => <div className="event-row" key={`${event.time}-${index}`}><span className={`event-dot ${event.type}`} /><span className="event-time">{event.time}</span><p>{event.message}</p></div>) : <p className="empty-events">Chưa có hoạt động mới.</p>}</div></section>
             <div className="panel-footer"><Battery size={13} /> Tất cả cảm biến đang kết nối <span className="footer-healthy"><span /> Tốt</span></div>
           </>}
