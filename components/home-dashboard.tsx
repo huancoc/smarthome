@@ -14,9 +14,12 @@ type RoomKey =
   | 'sanBe'
   | 'cuaBuong'
   | 'denTranh'
+  | 'warmDownlight'
+  | 'whiteDownlight'
+  | 'yeelightPN'
   | 'sanVuon'
   | 'denCong'
-type SensorKey = 'bathroom' | 'living'
+type SensorKey = 'bathroom' | 'living' | 'bedroom'
 type Pin = { id: string; x: number; y: number; title: string; kind: 'light' | 'sensor' | 'climate' | 'door' | 'weather' | 'ambient'; room?: RoomKey; sensor?: SensorKey; detail?: string }
 
 const floorImage = '/floor-plan/bg.jpg'
@@ -32,6 +35,9 @@ const roomLightImages: Record<RoomKey, string | null> = {
   sanBe: '/floor-plan/san-be.png',
   cuaBuong: '/floor-plan/cua-buong.png',
   denTranh: '/floor-plan/den-tranh.png',
+  warmDownlight: '/floor-plan/warm-downlight.png',
+  whiteDownlight: '/floor-plan/white-downlight.png',
+  yeelightPN: '/floor-plan/yeelight-PN.png',
   sanVuon: '/floor-plan/san-vuon.png',
   denCong: '/floor-plan/den-cong.png',
 }
@@ -39,23 +45,27 @@ const roomLightImages: Record<RoomKey, string | null> = {
 const initialPins: Pin[] = [
   { id: 'kho', x: 25, y: 25, title: 'Đèn phòng kho', kind: 'light', room: 'kho' },
   { id: 'bep', x: 25, y: 50, title: 'Đèn bếp', kind: 'light', room: 'bep' },
-  { id: 'an', x: 25, y: 66, title: 'Đèn phòng ăn', kind: 'light', room: 'phongAn' },
-  { id: 'an-climate', x: 25, y: 75, title: 'Nhiệt độ & độ ẩm phòng ăn', kind: 'climate', detail: '26.4° · 68%' },
-  { id: 'wc', x: 37, y: 14, title: 'Đèn nhà vệ sinh', kind: 'light', room: 'veSinh' },
-  { id: 'wc-presence', x: 41, y: 20, title: 'Hiện diện · nhà vệ sinh', kind: 'sensor', sensor: 'bathroom', detail: '1.2 m' },
+  { id: 'an', x: 24.4, y: 67.9, title: 'Đèn phòng ăn', kind: 'light', room: 'phongAn' },
+  { id: 'an-climate', x: 28.6, y: 88.7, title: 'Nhiệt độ & độ ẩm phòng ăn', kind: 'climate', detail: '26.4° · 68%' },
+  { id: 'wc', x: 42.7, y: 13.4, title: 'Đèn nhà vệ sinh', kind: 'light', room: 'veSinh' },
+  { id: 'wc-presence', x: 42.2, y: 4.8, title: 'Hiện diện · nhà vệ sinh', kind: 'sensor', sensor: 'bathroom', detail: '1.2 m' },
   { id: 'living', x: 55, y: 30, title: 'Đèn phòng khách', kind: 'light', room: 'khach' },
   { id: 'living-climate', x: 70, y: 25, title: 'Nhiệt độ & độ ẩm phòng khách', kind: 'climate', detail: '28.2° · 72%' },
-  { id: 'living-presence', x: 62, y: 38, title: 'Hiện diện · phòng khách', kind: 'sensor', sensor: 'living', detail: '1.8 m' },
-  { id: 'door', x: 77, y: 43, title: 'Cửa buồng · RFID', kind: 'door', room: 'cuaBuong' },
+  { id: 'living-presence', x: 63.6, y: 27.8, title: 'Hiện diện · phòng khách', kind: 'sensor', sensor: 'living', detail: '1.8 m' },
+  { id: 'door', x: 75.3, y: 38.1, title: 'Cửa buồng · RFID', kind: 'door', room: 'cuaBuong' },
   { id: 'bedroom-climate', x: 83, y: 39, title: 'Điều hòa Daikin', kind: 'climate', detail: '27.1° · 64%' },
-  { id: 'bedroom-light', x: 76, y: 15, title: 'Đèn tranh phòng ngủ', kind: 'light', room: 'denTranh' },
-  { id: 'garden', x: 80, y: 58, title: 'Đèn sân vườn', kind: 'light', room: 'sanVuon' },
-  { id: 'gate', x: 88, y: 65, title: 'Đèn cổng', kind: 'light', room: 'denCong' },
+  { id: 'bedroom-light', x: 81.8, y: 8.5, title: 'Đèn tranh phòng ngủ', kind: 'light', room: 'denTranh' },
+  { id: 'warm-downlight', x: 79.5, y: 16.5, title: 'Downlight vàng (4 góc)', kind: 'light', room: 'warmDownlight' },
+  { id: 'white-downlight', x: 83.5, y: 23.5, title: 'Downlight trắng (Giữa phòng)', kind: 'light', room: 'whiteDownlight' },
+  { id: 'yeelight-pn', x: 87.5, y: 16.5, title: 'Đèn Yeelight phòng ngủ', kind: 'light', room: 'yeelightPN' },
+  { id: 'bedroom-presence', x: 86.5, y: 30.5, title: 'Hiện diện · phòng ngủ', kind: 'sensor', sensor: 'bedroom', detail: '1.5 m' },
+  { id: 'garden', x: 85.2, y: 62.4, title: 'Đèn sân vườn', kind: 'light', room: 'sanVuon' },
+  { id: 'gate', x: 84.9, y: 86.1, title: 'Đèn cổng', kind: 'light', room: 'denCong' },
   { id: 'ambient', x: 92, y: 25, title: 'Cảm biến ánh sáng', kind: 'ambient' },
   { id: 'weather', x: 94, y: 9, title: 'Thời tiết ngoài trời', kind: 'weather', detail: '31° · 76%' },
-  { id: 'porch-left', x: 54, y: 17, title: 'Đèn hiên trái', kind: 'light', room: 'hienTrai' },
-  { id: 'porch-right', x: 72, y: 17, title: 'Đèn hiên phải', kind: 'light', room: 'hienPhai' },
-  { id: 'yard', x: 46, y: 53, title: 'Đèn sân bé', kind: 'light', room: 'sanBe' },
+  { id: 'porch-left', x: 58.4, y: 53.5, title: 'Đèn hiên trái', kind: 'light', room: 'hienTrai' },
+  { id: 'porch-right', x: 68.2, y: 52.8, title: 'Đèn hiên phải', kind: 'light', room: 'hienPhai' },
+  { id: 'yard', x: 46.8, y: 34.5, title: 'Đèn sân bé', kind: 'light', room: 'sanBe' },
 ]
 
 const initialLights: Record<RoomKey, boolean> = {
@@ -69,11 +79,14 @@ const initialLights: Record<RoomKey, boolean> = {
   sanBe: false,
   cuaBuong: false,
   denTranh: false,
+  warmDownlight: false,
+  whiteDownlight: false,
+  yeelightPN: false,
   sanVuon: false,
   denCong: false,
 }
-const initialDistances: Record<SensorKey, number> = { bathroom: 1.2, living: 1.8 }
-const initialPresence: Record<SensorKey, boolean> = { bathroom: false, living: true }
+const initialDistances: Record<SensorKey, number> = { bathroom: 1.2, living: 1.8, bedroom: 1.5 }
+const initialPresence: Record<SensorKey, boolean> = { bathroom: false, living: true, bedroom: false }
 
 function timeLabel() { return new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date()) }
 
@@ -126,12 +139,15 @@ export function HomeDashboard() {
   const togglePresence = (sensor: SensorKey) => {
     const next = !presence[sensor]
     setPresence(previous => ({ ...previous, [sensor]: next }))
-    const room = sensor === 'living' ? 'phòng khách' : 'nhà vệ sinh'
+    const room = sensor === 'living' ? 'phòng khách' : sensor === 'bathroom' ? 'nhà vệ sinh' : 'phòng ngủ'
     addEvent(`LD2410 ${room} ${next ? `phát hiện người (${distances[sensor].toFixed(1)}m)` : 'không còn phát hiện người'}`, 'sensor')
     if (automation && next && lux < 150) {
-      const light = sensor === 'living' ? 'khach' : 'veSinh'
+      const light: RoomKey = sensor === 'living' ? 'khach' : sensor === 'bathroom' ? 'veSinh' : 'warmDownlight'
       setLights(previous => ({ ...previous, [light]: true }))
       addEvent(`Trời tối (${lux} Lux) → Tự động bật đèn ${room}`, 'auto')
+    }
+    if (automation && next && sensor === 'bedroom' && lux < 150) {
+      addEvent(`LD2410 Phòng ngủ phát hiện chuyển động → Tự động bật Downlight vàng`, 'auto')
     }
     if (automation && next && temperature > 29) {
       setAcOn(true); setFanOn(true)
@@ -147,12 +163,16 @@ export function HomeDashboard() {
           setLights(previous => ({ ...previous, [room]: true }))
         }
       })
-      if (presence.living || presence.bathroom) addEvent(`Ánh sáng thấp (${value} Lux) + có người → Tự động bật đèn`, 'auto')
+      if (presence.bedroom) {
+        setLights(previous => ({ ...previous, warmDownlight: true }))
+        addEvent(`LD2410 Phòng ngủ phát hiện chuyển động → Tự động bật Downlight vàng`, 'auto')
+      }
+      if (presence.living || presence.bathroom || presence.bedroom) addEvent(`Ánh sáng thấp (${value} Lux) + có người → Tự động bật đèn`, 'auto')
     }
   }
   const updateTemperature = (value: number) => {
     setTemperature(value)
-    if (automation && value > 29 && (presence.living || presence.bathroom)) {
+    if (automation && value > 29 && (presence.living || presence.bathroom || presence.bedroom)) {
       setAcOn(true); setFanOn(true)
       addEvent(`Nhiệt độ ${value.toFixed(1)}°C → Bật điều hòa 24°C và quạt trần`, 'auto')
     }
@@ -278,7 +298,7 @@ export function HomeDashboard() {
                         height: '100%',
                         pointerEvents: 'none',
                         background: lights[room]
-                          ? 'radial-gradient(circle at 37% 14%, rgba(255, 236, 140, 0.55) 0%, rgba(255, 236, 140, 0.25) 12%, rgba(255, 236, 140, 0.08) 22%, transparent 34%)'
+                          ? 'radial-gradient(circle at 42.7% 13.4%, rgba(255, 236, 140, 0.55) 0%, rgba(255, 236, 140, 0.25) 12%, rgba(255, 236, 140, 0.08) 22%, transparent 34%)'
                           : 'transparent',
                         transition: 'opacity 0.3s ease',
                         opacity: lights[room] ? 1 : 0,
@@ -322,8 +342,8 @@ export function HomeDashboard() {
           {panelOpen && <>
             <div className="mode-switch"><button className={mode === 'demo' ? 'selected' : ''} onClick={() => { setMode('demo'); addEvent('Đã chuyển sang chế độ giả lập') }}><span className="mode-dot demo-dot" /> Giả lập</button><button className={mode === 'live' ? 'selected' : ''} onClick={() => { setMode('live'); addEvent('Chế độ kết nối thực tế đang chờ cấu hình API') }}><span className="mode-dot live-dot" /> Kết nối thực tế</button></div>
             {mode === 'live' && <div className="live-notice"><Radio size={14} /> Chế độ thực tế cần kết nối Home Assistant API.</div>}
-            <section className="panel-section sensors-section"><div className="section-heading"><div><span className="section-icon"><Users size={15} /></span><h3>Cảm biến hiện diện</h3></div><span className="device-count">LD2410 <span>· 2</span></span></div>
-              {(['living', 'bathroom'] as SensorKey[]).map(sensor => { const living = sensor === 'living'; const name = living ? 'Phòng khách' : 'Nhà vệ sinh'; return <div className="presence-card" key={sensor}><div className="presence-top"><div className={`presence-symbol ${presence[sensor] ? 'detected' : ''}`}><Users size={15} /></div><div className="presence-name"><strong>{name}</strong><span>{presence[sensor] ? 'Đang phát hiện người' : 'Không có người'}</span></div><button className={`mini-switch ${presence[sensor] ? 'on' : ''}`} aria-label={`${presence[sensor] ? 'Tắt' : 'Bật'} cảm biến ${name}`} aria-pressed={presence[sensor]} onClick={() => togglePresence(sensor)}><span /></button></div><div className="distance-row"><span>Khoảng cách</span><strong>{distances[sensor].toFixed(1)} <small>m</small></strong></div><input aria-label={`Khoảng cách ${name}`} type="range" min="0" max="6" step="0.1" value={distances[sensor]} onChange={e => setDistances(previous => ({ ...previous, [sensor]: Number(e.target.value) }))} /><div className="energy-bars"><span>Năng lượng</span><div className="bar-group" aria-label="Năng lượng đứng yên 38 phần trăm, chuyển động 72 phần trăm"><i className="bar-still" /><i className="bar-still" /><i className="bar-still" /><i className="bar-moving" /><i className="bar-moving" /><i className="bar-moving" /><i /><i /><i /><i /></div><span className="energy-caption">{living ? 'Tĩnh 38 · Động 72' : 'Tĩnh 12 · Động 04'}</span></div></div> })}
+            <section className="panel-section sensors-section"><div className="section-heading"><div><span className="section-icon"><Users size={15} /></span><h3>Cảm biến hiện diện</h3></div><span className="device-count">LD2410 <span>· 3</span></span></div>
+              {(['living', 'bathroom', 'bedroom'] as SensorKey[]).map(sensor => { const living = sensor === 'living'; const bedroom = sensor === 'bedroom'; const name = living ? 'Phòng khách' : bedroom ? 'Phòng ngủ' : 'Nhà vệ sinh'; const energyCaption = living ? 'Tĩnh 38 · Động 72' : bedroom ? 'Tĩnh 22 · Động 58' : 'Tĩnh 12 · Động 04'; return <div className="presence-card" key={sensor}><div className="presence-top"><div className={`presence-symbol ${presence[sensor] ? 'detected' : ''}`}><Users size={15} /></div><div className="presence-name"><strong>{name}</strong><span>{presence[sensor] ? 'Đang phát hiện người' : 'Không có người'}</span></div><button className={`mini-switch ${presence[sensor] ? 'on' : ''}`} aria-label={`${presence[sensor] ? 'Tắt' : 'Bật'} cảm biến ${name}`} aria-pressed={presence[sensor]} onClick={() => togglePresence(sensor)}><span /></button></div><div className="distance-row"><span>Khoảng cách</span><strong>{distances[sensor].toFixed(1)} <small>m</small></strong></div><input aria-label={`Khoảng cách ${name}`} type="range" min="0" max="6" step="0.1" value={distances[sensor]} onChange={e => setDistances(previous => ({ ...previous, [sensor]: Number(e.target.value) }))} /><div className="energy-bars"><span>Năng lượng</span><div className="bar-group" aria-label="Năng lượng đứng yên 38 phần trăm, chuyển động 72 phần trăm"><i className="bar-still" /><i className="bar-still" /><i className="bar-still" /><i className="bar-moving" /><i className="bar-moving" /><i className="bar-moving" /><i /><i /><i /><i /></div><span className="energy-caption">{energyCaption}</span></div></div> })}
             </section>
             <section className="panel-section environment-section"><div className="section-heading"><div><span className="section-icon sun-section"><Sun size={15} /></span><h3>Môi trường</h3></div><button className="text-action" onClick={() => addEvent('Đã đồng bộ dữ liệu môi trường', 'sensor')}>Đồng bộ</button></div>
               <div className="environment-item"><div className="environment-label"><span><Sun size={14} /> Ánh sáng xung quanh</span><strong>{lux} <small>Lux</small> <span className={`day-tag ${isDay ? 'day' : ''}`}>{isDay ? 'NGÀY' : 'ĐÊM'}</span></strong></div><input aria-label="Ánh sáng xung quanh, Lux" type="range" min="0" max="1000" step="10" value={lux} onChange={e => updateLux(Number(e.target.value))} /><div className="range-ends"><span>0 Lux</span><span>1000 Lux</span></div></div>
@@ -344,7 +364,7 @@ export function HomeDashboard() {
 function PinButton({ pin, lights, presence, lux, editMode, onLight, onPresence, onDragStart, acOn, onAc }: { pin: Pin; lights: Record<RoomKey, boolean>; presence: Record<SensorKey, boolean>; lux: number; editMode: boolean; onLight: (room: RoomKey, title: string) => void; onPresence: (sensor: SensorKey) => void; onDragStart: (event: React.PointerEvent<HTMLButtonElement>, id: string) => void; acOn: boolean; onAc: () => void }) {
   const active = pin.room ? lights[pin.room] : pin.sensor ? presence[pin.sensor] : pin.id === 'bedroom-climate' ? acOn : false
   const icon = pin.kind === 'light' ? <Lightbulb size={13} /> : pin.kind === 'sensor' ? <Users size={13} /> : pin.kind === 'climate' ? <Thermometer size={13} /> : pin.kind === 'door' ? <DoorOpen size={13} /> : pin.kind === 'weather' ? <CloudSun size={13} /> : lux > 300 ? <Sun size={13} /> : <Moon size={13} />
-  const detail = pin.sensor ? `${presence[pin.sensor] ? 'Có người · ' : 'Trống · '}${pin.sensor === 'living' ? '1.8' : '1.2'} m` : pin.id === 'ambient' ? `${lux} Lux` : pin.id === 'bedroom-climate' ? `${acOn ? '24° · Đang bật' : '27.1° · 64%'}` : pin.detail
+  const detail = pin.sensor ? `${presence[pin.sensor] ? 'Có người · ' : 'Trống · '}${pin.sensor === 'living' ? '1.8' : pin.sensor === 'bedroom' ? '1.5' : '1.2'} m` : pin.id === 'ambient' ? `${lux} Lux` : pin.id === 'bedroom-climate' ? `${acOn ? '24° · Đang bật' : '27.1° · 64%'}` : pin.detail
   const click = () => { if (editMode) return; if (pin.room) onLight(pin.room, pin.title); else if (pin.sensor) onPresence(pin.sensor); else if (pin.id === 'bedroom-climate') onAc() }
   return <button type="button" className={`map-pin pin-${pin.kind} ${active ? 'pin-active' : ''} ${pin.sensor && active ? 'pin-detected' : ''} ${editMode ? 'pin-editable' : ''} pin-${pin.id}`} style={{ left: `${pin.x}%`, top: `${pin.y}%`, cursor: editMode ? 'grab' : undefined, touchAction: editMode ? 'none' : undefined }} onClick={click} onPointerDown={event => onDragStart(event, pin.id)} aria-label={`${pin.title}${detail ? `, ${detail}` : ''}${editMode ? ', kéo để di chuyển' : pin.room || pin.sensor || pin.id === 'bedroom-climate' ? ', nhấn để điều khiển' : ''}`} aria-pressed={pin.room || pin.sensor || pin.id === 'bedroom-climate' ? active : undefined} title={editMode ? `${pin.title} · x: ${pin.x}, y: ${pin.y}` : pin.title}><span className="pin-icon">{icon}</span><span className="pin-copy"><strong>{pin.title}</strong>{detail && <small>{detail}</small>}{editMode && <small className="pin-coords">{pin.x}% · {pin.y}%</small>}</span>{active && pin.kind === 'light' && <span className="pin-status" />}</button>
 }
