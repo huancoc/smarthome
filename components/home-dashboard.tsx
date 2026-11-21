@@ -20,8 +20,9 @@ type RoomKey =
   | 'sanVuon'
   | 'denCong'
 
-// Presence sensor keys - 7 zones (+ phongNgu optional)
+// Presence sensor keys - 9 zones (thêm kho)
 type SensorKey =
+  | 'kho'
   | 'sanVuon'
   | 'phongOngBa'
   | 'nhaVeSinh'
@@ -71,7 +72,9 @@ const ENTITY_MAP = {
     denCong: 'light.den_cong',
   } as Record<RoomKey, string>,
   sensors: {
-    // 7-zone LD2410 presence
+    // 9-zone LD2410 presence (thêm kho)
+    khoPresence: 'binary_sensor.ld2410_kho',
+    khoDistance: 'sensor.ld2410_kho_distance',
     sanVuonPresence: 'binary_sensor.ld2410_san_vuon',
     sanVuonDistance: 'sensor.ld2410_san_vuon_distance',
     phongOngBaPresence: 'binary_sensor.ld2410_phong_ong_ba',
@@ -116,7 +119,7 @@ const ENTITY_MAP = {
 
 const floorImage = '/floor-plan/bg.jpg'
 
-// All light layers including the new /floor-plan/wc.png
+// All light layers including wc.png
 const lightLayers: Array<{ room: RoomKey; src: string }> = [
   { room: 'kho', src: '/floor-plan/kho.png' },
   { room: 'bep', src: '/floor-plan/bep.png' },
@@ -145,7 +148,7 @@ const ROOM_TITLE: Record<RoomKey, string> = {
   hienTrai: 'Hiên trái',
   hienPhai: 'Hiên phải',
   sanBe: 'Đèn SB',
-  cuaBuong: 'Cửa buồng',
+  cuaBuong: 'Đèn cửa buồng',
   denTranh: 'Đèn tranh',
   warmDownlight: 'Downlight vàng',
   whiteDownlight: 'Downlight trắng',
@@ -155,6 +158,7 @@ const ROOM_TITLE: Record<RoomKey, string> = {
 }
 
 const SENSOR_SHORT: Record<SensorKey, string> = {
+  kho: 'Kho',
   sanVuon: 'SV',
   phongOngBa: 'PK',
   nhaVeSinh: 'WC',
@@ -166,6 +170,7 @@ const SENSOR_SHORT: Record<SensorKey, string> = {
 }
 
 const SENSOR_LABELS: Record<SensorKey, string> = {
+  kho: 'Kho',
   sanVuon: 'Sân vườn',
   phongOngBa: 'Phòng ông bà',
   nhaVeSinh: 'Nhà vệ sinh',
@@ -191,7 +196,7 @@ const initialPins: Pin[] = [
   { id: 'wc', x: 42.7, y: 13.4, title: 'Đèn WC', kind: 'light', room: 'veSinh' },
   { id: 'living', x: 55, y: 30, title: 'Đèn PK', kind: 'light', room: 'khach' },
   { id: 'yard', x: 46.8, y: 34.5, title: 'Đèn SB', kind: 'light', room: 'sanBe' },
-  { id: 'door', x: 75.3, y: 38.1, title: 'Cửa buồng', kind: 'door', room: 'cuaBuong' },
+  { id: 'door', x: 75.3, y: 38.1, title: 'Đèn cửa buồng', kind: 'light', room: 'cuaBuong' },
   { id: 'bedroom-light', x: 81.8, y: 8.5, title: 'Đèn tranh', kind: 'light', room: 'denTranh' },
   { id: 'warm-downlight', x: 79.5, y: 16.5, title: 'Downlight vàng', kind: 'light', room: 'warmDownlight' },
   { id: 'white-downlight', x: 83.5, y: 23.5, title: 'Downlight trắng', kind: 'light', room: 'whiteDownlight' },
@@ -201,7 +206,8 @@ const initialPins: Pin[] = [
   { id: 'garden', x: 85.2, y: 62.4, title: 'Đèn SV', kind: 'light', room: 'sanVuon' },
   { id: 'gate', x: 84.9, y: 86.1, title: 'Đèn cổng', kind: 'light', room: 'denCong' },
 
-  // Presence sensors - single pins
+  // Presence sensors - single pins (thêm Kho x:25, y:15)
+  { id: 'kho-presence', x: 25, y: 15, title: 'Kho', kind: 'sensor', sensor: 'kho' },
   { id: 'pn-presence', x: 86.5, y: 30.5, title: 'PN', kind: 'sensor', sensor: 'phongNgu' },
   { id: 'pk-presence', x: 63.6, y: 27.8, title: 'PK', kind: 'sensor', sensor: 'phongOngBa' },
   { id: 'pa-presence', x: 31.5, y: 64.5, title: 'PA', kind: 'sensor', sensor: 'phongAn' },
@@ -253,6 +259,7 @@ const initialLights: Record<RoomKey, boolean> = {
 const initialFans: Record<FanKey, boolean> = { exhaustBedroom: false, freshAirFan: false, exhaustDining: false }
 
 const initialPresence: Record<SensorKey, boolean> = {
+  kho: false,
   sanVuon: false,
   phongOngBa: true,
   nhaVeSinh: false,
@@ -264,6 +271,7 @@ const initialPresence: Record<SensorKey, boolean> = {
 }
 
 const initialDistances: Record<SensorKey, number> = {
+  kho: 0,
   sanVuon: 0,
   phongOngBa: 1.8,
   nhaVeSinh: 1.2,
@@ -273,6 +281,22 @@ const initialDistances: Record<SensorKey, number> = {
   hienNha: 0,
   phongNgu: 1.5,
 }
+
+// --- Nhóm tự động hóa ---
+// Nhóm 1: Đèn trong nhà - bật ngay khi có người (không phụ thuộc lux)
+const AUTO_GROUP_1: Array<{ sensor: SensorKey; room: RoomKey; label: string }> = [
+  { sensor: 'kho', room: 'kho', label: 'Kho' },
+  { sensor: 'bep', room: 'bep', label: 'Bếp' },
+  { sensor: 'phongAn', room: 'phongAn', label: 'PA' },
+  { sensor: 'nhaVeSinh', room: 'veSinh', label: 'WC' },
+  { sensor: 'phongOngBa', room: 'khach', label: 'PK' },
+  { sensor: 'phongNgu', room: 'warmDownlight', label: 'PN' },
+  { sensor: 'sanBe', room: 'sanBe', label: 'SB' },
+]
+
+// Nhóm 3: Ngoài trời - KHÔNG tự động bật theo cảm biến hiện diện
+// (sanVuon, hienNha không map sang den sanVuon/hienTrai/hienPhai/denCong)
+const AUTO_GROUP_3_SENSORS: SensorKey[] = ['sanVuon', 'hienNha']
 
 function timeLabel() { return new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date()) }
 
@@ -353,6 +377,11 @@ export function HomeDashboard() {
   const [naturalCoolingRemaining, setNaturalCoolingRemaining] = useState<number | null>(null)
   const naturalCoolingActiveRef = useRef(false)
 
+  // Theo dõi presence trước đó để phát hiện chuyển false → true (kích hoạt automation)
+  const prevPresenceRef = useRef<Record<SensorKey, boolean>>({ ...initialPresence })
+  // Theo dõi lux trước đó để phát hiện chuyển sáng → tối (kích hoạt nhóm 2)
+  const prevLuxRef = useRef<number>(126)
+
   const addEvent = (message: string, type: 'auto' | 'manual' | 'sensor' | 'system' = 'manual') => setEvents(current => [{ time: timeLabel(), message, type }, ...current].slice(0, 12))
 
   const callHA = useCallback(async (init?: RequestInit & { password?: string }) => {
@@ -404,6 +433,7 @@ export function HomeDashboard() {
     })
 
     const presenceMap: Record<SensorKey, string> = {
+      kho: ENTITY_MAP.sensors.khoPresence,
       sanVuon: ENTITY_MAP.sensors.sanVuonPresence,
       phongOngBa: ENTITY_MAP.sensors.phongOngBaPresence,
       nhaVeSinh: ENTITY_MAP.sensors.nhaVeSinhPresence,
@@ -423,6 +453,7 @@ export function HomeDashboard() {
     })
 
     const distanceMap: Record<SensorKey, string> = {
+      kho: ENTITY_MAP.sensors.khoDistance,
       sanVuon: ENTITY_MAP.sensors.sanVuonDistance,
       phongOngBa: ENTITY_MAP.sensors.phongOngBaDistance,
       nhaVeSinh: ENTITY_MAP.sensors.nhaVeSinhDistance,
@@ -535,10 +566,7 @@ export function HomeDashboard() {
     }
   }, [mode, liveConnected, callHA])
 
-  const toggleLight = (room: RoomKey, title: string) => {
-    const next = !lights[room]
-    setLights(previous => ({ ...previous, [room]: next }))
-    addEvent(`${title} · ${next ? 'Đã bật' : 'Đã tắt'} đèn`, 'manual')
+  const pushLightToHA = useCallback((room: RoomKey, next: boolean) => {
     if (mode === 'live' && liveConnected) {
       const entityId = ENTITY_MAP.lights[room]
       callHA({ method: 'POST', body: JSON.stringify({ entity_id: entityId, action: next ? 'turn_on' : 'turn_off' }) })
@@ -554,6 +582,13 @@ export function HomeDashboard() {
           addEvent(`Không gửi được lệnh tới ${entityId}: ${message}`, 'system')
         })
     }
+  }, [mode, liveConnected, callHA])
+
+  const toggleLight = (room: RoomKey, title: string) => {
+    const next = !lights[room]
+    setLights(previous => ({ ...previous, [room]: next }))
+    addEvent(`${title} · ${next ? 'Đã bật' : 'Đã tắt'} đèn`, 'manual')
+    pushLightToHA(room, next)
   }
   const toggleAllLights = () => {
     const anyOff = Object.values(lights).some(value => !value)
@@ -566,12 +601,7 @@ export function HomeDashboard() {
     addEvent(next ? 'Đã bật tất cả đèn' : 'Đã tắt tất cả đèn', 'manual')
     if (mode === 'live' && liveConnected) {
       ;(Object.keys(ENTITY_MAP.lights) as RoomKey[]).forEach(room => {
-        const entityId = ENTITY_MAP.lights[room]
-        callHA({ method: 'POST', body: JSON.stringify({ entity_id: entityId, action: next ? 'turn_on' : 'turn_off' }) })
-          .catch(error => {
-            const message = error instanceof Error ? error.message : String(error)
-            addEvent(`Không gửi được lệnh tới ${entityId}: ${message}`, 'system')
-          })
+        pushLightToHA(room, next)
       })
     }
   }
@@ -585,20 +615,6 @@ export function HomeDashboard() {
 
   const updateLux = (value: number) => {
     setLux(value)
-    if (automation && value < 150) {
-      if (presence.phongOngBa) {
-        setLights(previous => ({ ...previous, khach: true }))
-      }
-      if (presence.nhaVeSinh) {
-        setLights(previous => ({ ...previous, veSinh: true }))
-      }
-      if (presence.phongNgu) {
-        setLights(previous => ({ ...previous, warmDownlight: true }))
-      }
-      if (presence.phongOngBa || presence.nhaVeSinh || presence.phongNgu) {
-        addEvent(`Ánh sáng thấp (${value} Lux) + có người → Tự động bật đèn`, 'auto')
-      }
-    }
   }
 
   const toggleAutomation = () => {
@@ -612,21 +628,7 @@ export function HomeDashboard() {
     const label = FAN_LABELS[key]
     setFans(previous => ({ ...previous, [key]: next }))
     addEvent(`${label} · ${next ? 'Đã bật' : 'Đã tắt'}`, 'manual')
-    if (mode === 'live' && liveConnected) {
-      const entityId = ENTITY_MAP.fans[key]
-      callHA({ method: 'POST', body: JSON.stringify({ entity_id: entityId, action: next ? 'turn_on' : 'turn_off' }) })
-        .then(async response => {
-          if (!response.ok) {
-            const body = await response.json().catch(() => null)
-            const detail = formatErrorDetail(body)
-            addEvent(`HA từ chối lệnh cho ${entityId} (${response.status})${detail ? `: ${detail}` : ''}`, 'system')
-          }
-        })
-        .catch(error => {
-          const message = error instanceof Error ? error.message : String(error)
-          addEvent(`Không gửi được lệnh tới ${entityId}: ${message}`, 'system')
-        })
-    }
+    pushFanToHA(key, next)
   }
 
   const summary = useMemo(() => `${Object.values(lights).filter(Boolean).length + Object.values(fans).filter(Boolean).length} thiết bị đang hoạt động`, [lights, fans])
@@ -809,7 +811,60 @@ export function HomeDashboard() {
     naturalCoolingActiveRef.current = false
   }, [automation])
 
-  // Rule 1
+  // ===== NHÓM 1: Đèn trong nhà - bật ngay khi có người (không phụ thuộc lux) =====
+  useEffect(() => {
+    if (!automation) {
+      prevPresenceRef.current = { ...presence }
+      return
+    }
+    const prev = prevPresenceRef.current
+    AUTO_GROUP_1.forEach(({ sensor, room, label }) => {
+      const wasPresent = prev[sensor]
+      const isPresent = presence[sensor]
+      if (isPresent && !wasPresent) {
+        // Có người mới xuất hiện → bật đèn ngay nếu chưa bật
+        if (!lights[room]) {
+          setLights(state => ({ ...state, [room]: true }))
+          addEvent(`LD2410 ${label} phát hiện người → Bật ${ROOM_TITLE[room]}`, 'auto')
+          pushLightToHA(room, true)
+        }
+      }
+    })
+    prevPresenceRef.current = { ...presence }
+  }, [presence, automation, lights, pushLightToHA])
+
+  // ===== NHÓM 2: Đèn cửa buồng - chỉ bật khi có người (Hiên hoặc PN) VÀ trời tối (lux <= 300) =====
+  useEffect(() => {
+    if (!automation) {
+      prevPresenceRef.current = { ...presence }
+      prevLuxRef.current = lux
+      return
+    }
+    const prev = prevPresenceRef.current
+    const prevLux = prevLuxRef.current
+    const hasPresenceTrigger = (presence.hienNha && !prev.hienNha) || (presence.phongNgu && !prev.phongNgu)
+    const luxBecameDark = lux <= 300 && prevLux > 300
+    const currentlyDark = lux <= 300
+    const someonePresent = presence.hienNha || presence.phongNgu
+
+    // Kích hoạt khi: vừa có người mới xuất hiện và trời đang tối,
+    // HOẶC: vừa chuyển sang tối và đang có người
+    if ((hasPresenceTrigger && currentlyDark) || (luxBecameDark && someonePresent)) {
+      if (!lights.cuaBuong) {
+        setLights(state => ({ ...state, cuaBuong: true }))
+        addEvent(`Có người + Trời tối → Bật Đèn cửa buồng`, 'auto')
+        pushLightToHA('cuaBuong', true)
+      }
+    }
+    prevPresenceRef.current = { ...presence }
+    prevLuxRef.current = lux
+  }, [presence, lux, automation, lights.cuaBuong, pushLightToHA])
+
+  // ===== NHÓM 3: Ngoài trời - KHÔNG tự động bật theo cảm biến hiện diện =====
+  // Không có effect nào ở đây (sanVuon/hienNha không map sang đèn ngoài trời).
+  // Chỉ bật/tắt thủ công khi bấm nút.
+
+  // Rule 1: MQ2 → quạt hút mùi PN
   useEffect(() => {
     if (!automation) return
     if (mq2Bedroom > mq2Threshold) {
@@ -827,7 +882,7 @@ export function HomeDashboard() {
     }
   }, [mq2Bedroom, mq2Threshold, automation, fans.exhaustBedroom, pushFanToHA])
 
-  // Rule 2
+  // Rule 2: CO2 → quạt gió tươi + escalate
   useEffect(() => {
     if (!automation) return
     if (co2Dining > co2Threshold) {
@@ -885,7 +940,7 @@ export function HomeDashboard() {
     }
   }, [co2Dining, co2Threshold, automation, fans.freshAirFan, fans.exhaustDining, pushFanToHA])
 
-  // Rule 3
+  // Rule 3: Làm mát tự nhiên
   useEffect(() => {
     if (!automation) return
     const outdoorOk = outdoorTemp < 28
@@ -946,7 +1001,7 @@ export function HomeDashboard() {
             <article className="metric-card"><div className="metric-icon warm"><Thermometer size={17} /></div><span className="metric-label">NHIỆT ĐỘ TRONG NHÀ</span><div className="metric-reading">{grandparentsTemp.toFixed(1)}<span>°C</span><span className="metric-trend up"><ArrowUpRight size={13} /> 1.2°</span></div><div className="metric-foot">Phòng ông bà <span>Thoải mái</span></div></article>
             <article className="metric-card"><div className="metric-icon blue"><Waves size={17} /></div><span className="metric-label">ĐỘ ẨM</span><div className="metric-reading">{grandparentsHum}<span>%</span><span className="metric-trend down"><ArrowDownRight size={13} /> 2%</span></div><div className="metric-foot">Trong nhà <span>Bình thường</span></div></article>
             <article className="metric-card"><div className="metric-icon amber"><Sun size={17} /></div><span className="metric-label">ÁNH SÁNG NGOÀI TRỜI</span><div className="metric-reading">{lux}<span>Lux</span></div><div className="metric-foot">Sân vườn <span>{isDay ? 'Ban ngày' : 'Ánh sáng thấp'}</span></div></article>
-            <article className="metric-card"><div className="metric-icon green"><Zap size={17} /></div><span className="metric-label">THIẾT BỊ ĐANG BẬT</span><div className="metric-reading">{Object.values(lights).filter(Boolean).length + Object.values(fans).filter(Boolean).length + Number(acOn) + Number(fanOn)}<span>/ 20</span></div><div className="metric-foot">{summary}<span className="healthy"><span /> Ổn định</span></div></article>
+            <article className="metric-card"><div className="metric-icon green"><Zap size={17} /></div><span className="metric-label">THIẾT BỊ ĐANG BẬT</span><div className="metric-reading">{Object.values(lights).filter(Boolean).length + Object.values(fans).filter(Boolean).length + Number(acOn) + Number(fanOn)}<span>/ 21</span></div><div className="metric-foot">{summary}<span className="healthy"><span /> Ổn định</span></div></article>
           </div>
 
           <section className="floor-card" aria-label="Sơ đồ mặt bằng tương tác">
@@ -1026,7 +1081,7 @@ export function HomeDashboard() {
               <div className="map-compass"><span>N</span><ArrowUpRight size={14} /></div>
               <div className="map-legend"><span><i className="legend-light" /> Đèn đang bật</span><span><i className="legend-presence" /> Có người</span><span><i className="legend-fan" /> Quạt đang bật</span></div>
             </div>
-            <div className="floor-footer"><span><Radio size={13} /> 20 thiết bị <b>·</b> 8 cảm biến</span><span>{editMode ? 'Chế độ chỉnh tọa độ: kéo thả pin để di chuyển' : 'Cập nhật lần cuối: vừa xong'} <span className="sync-mark"><Activity size={13} /></span></span></div>
+            <div className="floor-footer"><span><Radio size={13} /> 21 thiết bị <b>·</b> 9 cảm biến</span><span>{editMode ? 'Chế độ chỉnh tọa độ: kéo thả pin để di chuyển' : 'Cập nhật lần cuối: vừa xong'} <span className="sync-mark"><Activity size={13} /></span></span></div>
           </section>
           <div className="bottom-note"><ShieldCheck size={14} /> Hệ thống được bảo vệ <span>·</span> Đồng bộ lần cuối 14:02:10</div>
         </div>
@@ -1054,8 +1109,8 @@ export function HomeDashboard() {
             {mode === 'live' && liveConnected && (
               <div className="live-notice"><Radio size={14} /> Đã kết nối Home Assistant · Đồng bộ mỗi 3 giây.</div>
             )}
-            <section className="panel-section sensors-section"><div className="section-heading"><div><span className="section-icon"><Users size={15} /></span><h3>Cảm biến hiện diện</h3></div><span className="device-count">LD2410 <span>· 8</span></span></div>
-              {(['sanVuon', 'phongOngBa', 'nhaVeSinh', 'bep', 'phongAn', 'sanBe', 'hienNha', 'phongNgu'] as SensorKey[]).map(sensor => { const label = SENSOR_LABELS[sensor]; return <div className="presence-card" key={sensor}><div className="presence-top"><div className={`presence-symbol ${presence[sensor] ? 'detected' : ''}`}><Users size={15} /></div><div className="presence-name"><strong>{label}</strong><span>{presence[sensor] ? 'Đang phát hiện người' : 'Không có người'}</span></div><button className={`mini-switch ${presence[sensor] ? 'on' : ''}`} aria-label={`${presence[sensor] ? 'Tắt' : 'Bật'} cảm biến ${label}`} aria-pressed={presence[sensor]} onClick={() => togglePresence(sensor)}><span /></button></div><div className="distance-row"><span>Khoảng cách</span><strong>{distances[sensor].toFixed(1)} <small>m</small></strong></div><input aria-label={`Khoảng cách ${label}`} type="range" min="0" max="6" step="0.1" value={distances[sensor]} onChange={e => setDistances(previous => ({ ...previous, [sensor]: Number(e.target.value) }))} /></div> })}
+            <section className="panel-section sensors-section"><div className="section-heading"><div><span className="section-icon"><Users size={15} /></span><h3>Cảm biến hiện diện</h3></div><span className="device-count">LD2410 <span>· 9</span></span></div>
+              {(['kho', 'sanVuon', 'phongOngBa', 'nhaVeSinh', 'bep', 'phongAn', 'sanBe', 'hienNha', 'phongNgu'] as SensorKey[]).map(sensor => { const label = SENSOR_LABELS[sensor]; return <div className="presence-card" key={sensor}><div className="presence-top"><div className={`presence-symbol ${presence[sensor] ? 'detected' : ''}`}><Users size={15} /></div><div className="presence-name"><strong>{label}</strong><span>{presence[sensor] ? 'Đang phát hiện người' : 'Không có người'}</span></div><button className={`mini-switch ${presence[sensor] ? 'on' : ''}`} aria-label={`${presence[sensor] ? 'Tắt' : 'Bật'} cảm biến ${label}`} aria-pressed={presence[sensor]} onClick={() => togglePresence(sensor)}><span /></button></div><div className="distance-row"><span>Khoảng cách</span><strong>{distances[sensor].toFixed(1)} <small>m</small></strong></div><input aria-label={`Khoảng cách ${label}`} type="range" min="0" max="6" step="0.1" value={distances[sensor]} onChange={e => setDistances(previous => ({ ...previous, [sensor]: Number(e.target.value) }))} /></div> })}
             </section>
             <section className="panel-section environment-section"><div className="section-heading"><div><span className="section-icon sun-section"><Sun size={15} /></span><h3>Môi trường & An toàn</h3></div><button className="text-action" onClick={() => addEvent('Đã đồng bộ dữ liệu môi trường', 'sensor')}>Đồng bộ</button></div>
               <div className="environment-item"><div className="environment-label"><span><Sun size={14} /> Ánh sáng xung quanh</span><strong>{lux} <small>Lux</small> <span className={`day-tag ${isDay ? 'day' : ''}`}>{isDay ? 'NGÀY' : 'ĐÊM'}</span></strong></div><input aria-label="Ánh sáng xung quanh, Lux" type="range" min="0" max="1000" step="10" value={lux} onChange={e => updateLux(Number(e.target.value))} /><div className="range-ends"><span>0 Lux</span><span>1000 Lux</span></div></div>
@@ -1068,7 +1123,7 @@ export function HomeDashboard() {
               {co2OffRemaining !== null && <div style={{ fontSize: '12px', color: '#27ae60', marginTop: '4px' }}>⏳ CO2 đạt chuẩn: tắt quạt sau {Math.floor(co2OffRemaining / 60)}:{String(co2OffRemaining % 60).padStart(2, '0')}</div>}
               {naturalCoolingRemaining !== null && <div style={{ fontSize: '12px', color: '#2980b9', marginTop: '4px' }}>🌬️ Làm mát tự nhiên: còn {Math.floor(naturalCoolingRemaining / 60)}:{String(naturalCoolingRemaining % 60).padStart(2, '0')}</div>}
             </section>
-            <section className="automation-card"><div className="automation-heading"><div className="automation-icon"><Zap size={16} /></div><div><strong>Tự động hóa thông minh</strong><span>{automation ? 'Đang hoạt động' : 'Đã tạm dừng'}</span></div><button className={`mini-switch ${automation ? 'on' : ''}`} aria-label={`${automation ? 'Tắt' : 'Bật'} tự động hóa`} aria-pressed={automation} onClick={toggleAutomation}><span /></button></div><p>MQ2 &gt; ngưỡng: bật quạt hút mùi phòng ngủ. CO2 &gt; ngưỡng: bật quạt gió tươi, sau 1 phút bật thêm quạt hút mùi phòng ăn; CO2 đạt chuẩn 3 phút tắt cả hai. Trời mát &lt;28°C, phòng &gt;30°C, có người: bật quạt gió tươi 15 phút.</p></section>
+            <section className="automation-card"><div className="automation-heading"><div className="automation-icon"><Zap size={16} /></div><div><strong>Tự động hóa thông minh</strong><span>{automation ? 'Đang hoạt động' : 'Đã tạm dừng'}</span></div><button className={`mini-switch ${automation ? 'on' : ''}`} aria-label={`${automation ? 'Tắt' : 'Bật'} tự động hóa`} aria-pressed={automation} onClick={toggleAutomation}><span /></button></div><p>Nhóm 1: Kho/Bếp/PA/WC/PK/PN/SB bật đèn ngay khi có người. Nhóm 2: Đèn cửa buồng bật khi Hiên/PN có người &amp; trời tối (lux ≤ 300). Nhóm 3: Đèn SV/cổng/hiên chỉ bật thủ công. MQ2 &gt; ngưỡng: bật quạt hút mùi PN. CO2 &gt; ngưỡng: bật quạt gió tươi, sau 1 phút bật thêm quạt hút mùi PA; đạt chuẩn 3 phút tắt cả hai. Trời mát &lt;28°C, phòng &gt;30°C, có người: bật quạt gió tươi 15 phút.</p></section>
             <section className="panel-section devices-section"><div className="section-heading"><div><span className="section-icon device-section"><Zap size={15} /></span><h3>Thiết bị nhanh</h3></div><button className="text-action" onClick={() => addEvent('Đã mở danh sách thiết bị')}>Tất cả <ChevronRight size={12} /></button></div><div className="quick-devices">
               <button className={`device-tile ${fans.exhaustBedroom ? 'active' : ''}`} onClick={() => toggleFan('exhaustBedroom')}><span className="tile-icon"><Fan size={17} /></span><span><strong>Hút mùi PN</strong><small>{fans.exhaustBedroom ? 'Đang bật' : 'Tắt'}</small></span><ChevronDown size={13} /></button>
               <button className={`device-tile ${fans.freshAirFan ? 'active' : ''}`} onClick={() => toggleFan('freshAirFan')}><span className="tile-icon"><Fan size={17} /></span><span><strong>Gió tươi</strong><small>{fans.freshAirFan ? 'Đang bật' : 'Tắt'}</small></span><ChevronDown size={13} /></button>
