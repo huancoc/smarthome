@@ -34,7 +34,26 @@ type SensorKey =
 // Exhaust / fresh-air fan keys
 type FanKey = 'exhaustBedroom' | 'freshAirFan' | 'exhaustDining'
 
-type Pin = { id: string; x: number; y: number; title: string; kind: 'light' | 'sensor' | 'climate' | 'door' | 'weather' | 'ambient' | 'fan' | 'air'; room?: RoomKey; sensor?: SensorKey; fan?: FanKey; detail?: string }
+// Pin kinds: original ones + group kinds
+type PinKind = 'light' | 'sensor' | 'climate' | 'door' | 'weather' | 'ambient' | 'fan' | 'air' | 'group-lights' | 'group-sensors'
+
+type Pin = {
+  id: string
+  x: number
+  y: number
+  title: string
+  kind: PinKind
+  room?: RoomKey
+  sensor?: SensorKey
+  fan?: FanKey
+  // Group pins
+  rooms?: RoomKey[]        // for group-lights
+  sensors?: SensorKey[]    // for group-sensors
+  showAir?: boolean        // for group-sensors: show MQ2/CO2
+  showLux?: boolean        // for group-sensors: show lux
+  showClimate?: boolean    // for group-sensors: show temp/hum
+  detail?: string
+}
 type Mode = 'demo' | 'live'
 type HAState = { entity_id: string; state: string; attributes?: Record<string, unknown> }
 
@@ -122,42 +141,85 @@ const roomLightImages: Record<RoomKey, string | null> = {
   denCong: '/floor-plan/den-cong.png',
 }
 
-// Pin map: 7 presence zones + 3 fans + 3 climate (outdoor/grandparents/dining) + air badges (MQ2 bedroom, CO2 dining)
+// Short names for rooms/lights
+const ROOM_SHORT: Record<RoomKey, string> = {
+  kho: 'Kho',
+  bep: 'Bếp',
+  veSinh: 'WC',
+  phongAn: 'PA',
+  khach: 'PK',
+  hienTrai: 'Hiên trái',
+  hienPhai: 'Hiên phải',
+  sanBe: 'SB',
+  cuaBuong: 'Cửa',
+  denTranh: 'Tranh',
+  warmDownlight: 'Vàng',
+  whiteDownlight: 'Trắng',
+  yeelightPN: 'Yeelight',
+  sanVuon: 'Sân vườn',
+  denCong: 'Cổng',
+}
+
+const ROOM_TITLE: Record<RoomKey, string> = {
+  kho: 'Đèn Kho',
+  bep: 'Đèn Bếp',
+  veSinh: 'Đèn WC',
+  phongAn: 'Đèn PA',
+  khach: 'Đèn PK',
+  hienTrai: 'Đèn Hiên trái',
+  hienPhai: 'Đèn Hiên phải',
+  sanBe: 'Đèn SB',
+  cuaBuong: 'Đèn Cửa buồng',
+  denTranh: 'Đèn Tranh',
+  warmDownlight: 'Downlight vàng',
+  whiteDownlight: 'Downlight trắng',
+  yeelightPN: 'Yeelight PN',
+  sanVuon: 'Đèn Sân vườn',
+  denCong: 'Đèn Cổng',
+}
+
+// Pin map: short labels, grouped lights, grouped sensors
 const initialPins: Pin[] = [
-  { id: 'kho', x: 25, y: 25, title: 'Đèn phòng kho', kind: 'light', room: 'kho' },
-  { id: 'bep', x: 25, y: 50, title: 'Đèn bếp', kind: 'light', room: 'bep' },
-  { id: 'an', x: 24.4, y: 67.9, title: 'Đèn phòng ăn', kind: 'light', room: 'phongAn' },
-  { id: 'an-climate', x: 28.6, y: 88.7, title: 'Nhiệt độ & độ ẩm phòng ăn', kind: 'climate', detail: '26.4° · 68%' },
-  { id: 'dining-co2', x: 33.5, y: 78.5, title: 'CO2 phòng ăn', kind: 'air', detail: 'CO2 · 650 ppm' },
-  { id: 'dining-fan', x: 20.5, y: 76.5, title: 'Quạt hút mùi phòng ăn', kind: 'fan', fan: 'exhaustDining', detail: 'Đang tắt' },
-  { id: 'dining-presence', x: 31.5, y: 64.5, title: 'Hiện diện · phòng ăn', kind: 'sensor', sensor: 'phongAn', detail: 'Trống · 0.0 m' },
-  { id: 'wc', x: 42.7, y: 13.4, title: 'Đèn nhà vệ sinh', kind: 'light', room: 'veSinh' },
-  { id: 'wc-presence', x: 42.2, y: 4.8, title: 'Hiện diện · nhà vệ sinh', kind: 'sensor', sensor: 'nhaVeSinh', detail: '1.2 m' },
-  { id: 'living', x: 55, y: 30, title: 'Đèn phòng khách', kind: 'light', room: 'khach' },
-  { id: 'living-climate', x: 70, y: 25, title: 'Nhiệt độ & độ ẩm phòng ông bà', kind: 'climate', detail: '28.2° · 72%' },
-  { id: 'living-presence', x: 63.6, y: 27.8, title: 'Hiện diện · phòng ông bà', kind: 'sensor', sensor: 'phongOngBa', detail: '1.8 m' },
+  // Single lights
+  { id: 'kho', x: 25, y: 25, title: 'Đèn Kho', kind: 'light', room: 'kho' },
+  { id: 'bep', x: 25, y: 50, title: 'Đèn Bếp', kind: 'light', room: 'bep' },
+  { id: 'an', x: 24.4, y: 67.9, title: 'Đèn PA', kind: 'light', room: 'phongAn' },
+  { id: 'wc', x: 42.7, y: 13.4, title: 'Đèn WC', kind: 'light', room: 'veSinh' },
+  { id: 'living', x: 55, y: 30, title: 'Đèn PK', kind: 'light', room: 'khach' },
+  { id: 'yard', x: 46.8, y: 34.5, title: 'Đèn SB', kind: 'light', room: 'sanBe' },
   { id: 'door', x: 75.3, y: 38.1, title: 'Cửa buồng · RFID', kind: 'door', room: 'cuaBuong' },
-  { id: 'bedroom-climate', x: 83, y: 39, title: 'Điều hòa Daikin', kind: 'climate', detail: '27.1° · 64%' },
-  { id: 'bedroom-light', x: 81.8, y: 8.5, title: 'Đèn tranh phòng ngủ', kind: 'light', room: 'denTranh' },
-  { id: 'warm-downlight', x: 79.5, y: 16.5, title: 'Downlight vàng (4 góc)', kind: 'light', room: 'warmDownlight' },
-  { id: 'white-downlight', x: 83.5, y: 23.5, title: 'Downlight trắng (Giữa phòng)', kind: 'light', room: 'whiteDownlight' },
-  { id: 'yeelight-pn', x: 87.5, y: 16.5, title: 'Đèn Yeelight phòng ngủ', kind: 'light', room: 'yeelightPN' },
-  { id: 'bedroom-presence', x: 86.5, y: 30.5, title: 'Hiện diện · phòng ngủ', kind: 'sensor', sensor: 'phongNgu', detail: '1.5 m' },
-  { id: 'bedroom-mq2', x: 90.5, y: 33.5, title: 'Khói MQ2 phòng ngủ', kind: 'air', detail: 'MQ2 · 120 ppm' },
-  { id: 'bedroom-fan', x: 90.2, y: 44.5, title: 'Quạt hút mùi phòng ngủ', kind: 'fan', fan: 'exhaustBedroom', detail: 'Đang tắt' },
-  { id: 'fresh-air-fan', x: 63.5, y: 41.5, title: 'Quạt gió tươi', kind: 'fan', fan: 'freshAirFan', detail: 'Đang tắt' },
-  { id: 'garden', x: 85.2, y: 62.4, title: 'Đèn sân vườn', kind: 'light', room: 'sanVuon' },
-  { id: 'garden-climate', x: 77.5, y: 66.5, title: 'Nhiệt độ & độ ẩm sân vườn', kind: 'climate', detail: '31.0° · 76%' },
-  { id: 'garden-presence', x: 90.5, y: 68.5, title: 'Hiện diện · sân vườn', kind: 'sensor', sensor: 'sanVuon', detail: 'Trống · 0.0 m' },
-  { id: 'gate', x: 84.9, y: 86.1, title: 'Đèn cổng', kind: 'light', room: 'denCong' },
-  { id: 'ambient', x: 92, y: 25, title: 'Cảm biến ánh sáng', kind: 'ambient' },
-  { id: 'weather', x: 94, y: 9, title: 'Thời tiết ngoài trời', kind: 'weather', detail: '31° · 76%' },
-  { id: 'porch-left', x: 58.4, y: 53.5, title: 'Đèn hiên trái', kind: 'light', room: 'hienTrai' },
-  { id: 'porch-right', x: 68.2, y: 52.8, title: 'Đèn hiên phải', kind: 'light', room: 'hienPhai' },
-  { id: 'porch-presence', x: 62.5, y: 57.5, title: 'Hiện diện · hiên nhà', kind: 'sensor', sensor: 'hienNha', detail: 'Trống · 0.0 m' },
-  { id: 'yard', x: 46.8, y: 34.5, title: 'Đèn sân bé', kind: 'light', room: 'sanBe' },
-  { id: 'yard-presence', x: 52.5, y: 37.5, title: 'Hiện diện · sân bể', kind: 'sensor', sensor: 'sanBe', detail: 'Trống · 0.0 m' },
-  { id: 'kitchen-presence', x: 28.5, y: 43.5, title: 'Hiện diện · bếp', kind: 'sensor', sensor: 'bep', detail: 'Trống · 0.0 m' },
+
+  // Group lights - PN (4 lights)
+  { id: 'group-lights-pn', x: 82.5, y: 18.5, title: 'Nhóm Đèn PN', kind: 'group-lights', rooms: ['denTranh', 'warmDownlight', 'whiteDownlight', 'yeelightPN'] },
+  // Group lights - Hiên (2 lights)
+  { id: 'group-lights-hien', x: 63.5, y: 49.5, title: 'Nhóm Đèn Hiên', kind: 'group-lights', rooms: ['hienTrai', 'hienPhai'] },
+  // Group lights - Ngoài trời (Sân vườn + Cổng)
+  { id: 'group-lights-outdoor', x: 85.5, y: 76.5, title: 'Nhóm Đèn SV', kind: 'group-lights', rooms: ['sanVuon', 'denCong'] },
+
+  // Group sensors - PN (presence + temp/hum + MQ2)
+  { id: 'group-sensors-pn', x: 88.5, y: 36.5, title: 'PN', kind: 'group-sensors', sensors: ['phongNgu'], showClimate: true, showAir: true },
+  // Group sensors - PA (presence + temp/hum + CO2)
+  { id: 'group-sensors-pa', x: 30.5, y: 78.5, title: 'PA', kind: 'group-sensors', sensors: ['phongAn'], showClimate: true, showAir: true },
+  // Group sensors - PK (presence + temp/hum)
+  { id: 'group-sensors-pk', x: 66.5, y: 32.5, title: 'PK', kind: 'group-sensors', sensors: ['phongOngBa'], showClimate: true },
+  // Group sensors - SV (presence + temp/hum + lux)
+  { id: 'group-sensors-sv', x: 87.5, y: 64.5, title: 'SV', kind: 'group-sensors', sensors: ['sanVuon'], showClimate: true, showLux: true },
+
+  // Single presence sensors
+  { id: 'wc-presence', x: 42.2, y: 4.8, title: 'WC', kind: 'sensor', sensor: 'nhaVeSinh' },
+  { id: 'kitchen-presence', x: 28.5, y: 43.5, title: 'Bếp', kind: 'sensor', sensor: 'bep' },
+  { id: 'yard-presence', x: 52.5, y: 37.5, title: 'SB', kind: 'sensor', sensor: 'sanBe' },
+  { id: 'porch-presence', x: 62.5, y: 57.5, title: 'Hiên', kind: 'sensor', sensor: 'hienNha' },
+
+  // Fans
+  { id: 'dining-fan', x: 20.5, y: 76.5, title: 'Hút mùi PA', kind: 'fan', fan: 'exhaustDining' },
+  { id: 'bedroom-fan', x: 92.5, y: 42.5, title: 'Hút mùi PN', kind: 'fan', fan: 'exhaustBedroom' },
+  { id: 'fresh-air-fan', x: 58.5, y: 42.5, title: 'Gió tươi', kind: 'fan', fan: 'freshAirFan' },
+
+  // Climate AC + Weather + ambient
+  { id: 'bedroom-climate', x: 76.5, y: 34.5, title: 'Điều hòa', kind: 'climate' },
+  { id: 'ambient', x: 92, y: 25, title: 'Ánh sáng', kind: 'ambient' },
+  { id: 'weather', x: 94, y: 9, title: 'Thời tiết', kind: 'weather', detail: '31° · 76%' },
 ]
 
 const initialLights: Record<RoomKey, boolean> = {
@@ -213,6 +275,17 @@ const SENSOR_LABELS: Record<SensorKey, string> = {
   phongNgu: 'Phòng ngủ',
 }
 
+const SENSOR_SHORT: Record<SensorKey, string> = {
+  sanVuon: 'SV',
+  phongOngBa: 'PK',
+  nhaVeSinh: 'WC',
+  bep: 'Bếp',
+  phongAn: 'PA',
+  sanBe: 'SB',
+  hienNha: 'Hiên',
+  phongNgu: 'PN',
+}
+
 const FAN_LABELS: Record<FanKey, string> = {
   exhaustBedroom: 'Quạt hút mùi phòng ngủ',
   freshAirFan: 'Quạt gió tươi',
@@ -227,6 +300,11 @@ function pinsToCode(pins: Pin[]) {
     if (pin.room) parts.push(`room: '${pin.room}'`)
     if (pin.sensor) parts.push(`sensor: '${pin.sensor}'`)
     if (pin.fan) parts.push(`fan: '${pin.fan}'`)
+    if (pin.rooms) parts.push(`rooms: [${pin.rooms.map(r => `'${r}'`).join(', ')}]`)
+    if (pin.sensors) parts.push(`sensors: [${pin.sensors.map(s => `'${s}'`).join(', ')}]`)
+    if (pin.showAir) parts.push(`showAir: true`)
+    if (pin.showLux) parts.push(`showLux: true`)
+    if (pin.showClimate) parts.push(`showClimate: true`)
     if (pin.detail) parts.push(`detail: '${pin.detail.replace(/'/g, "\\'")}'`)
     return `  { ${parts.join(', ')} },`
   })
@@ -262,7 +340,6 @@ export function HomeDashboard() {
   const [distances, setDistances] = useState<Record<SensorKey, number>>(initialDistances)
   const [lux, setLux] = useState(126)
 
-  // Environment values (3 zones)
   const [outdoorTemp, setOutdoorTemp] = useState(31)
   const [outdoorHum, setOutdoorHum] = useState(76)
   const [grandparentsTemp, setGrandparentsTemp] = useState(28.2)
@@ -270,7 +347,6 @@ export function HomeDashboard() {
   const [diningTemp, setDiningTemp] = useState(26.4)
   const [diningHum, setDiningHum] = useState(68)
 
-  // Air quality
   const [mq2Bedroom, setMq2Bedroom] = useState(120)
   const [co2Dining, setCo2Dining] = useState(650)
   const [mq2Threshold, setMq2Threshold] = useState(300)
@@ -288,7 +364,7 @@ export function HomeDashboard() {
   const dragStateRef = useRef<{ id: string | null }>({ id: null })
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Automation timing refs (real-time countdowns)
+  // Automation timing refs
   const co2EscalationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const co2OffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const co2OffTickRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -296,7 +372,6 @@ export function HomeDashboard() {
   const [co2OffRemaining, setCo2OffRemaining] = useState<number | null>(null)
   const co2EscalationStartedRef = useRef(false)
   const co2OffPendingRef = useRef(false)
-  // Rule 3 natural-cooling window
   const naturalCoolingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const naturalCoolingTickRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [naturalCoolingRemaining, setNaturalCoolingRemaining] = useState<number | null>(null)
@@ -412,7 +487,6 @@ export function HomeDashboard() {
     if (mq2Value !== null) setMq2Bedroom(Math.round(mq2Value))
 
     const co2Value = readNumber(ENTITY_MAP.sensors.co2Dining)
-    // In live mode, if HA entity not configured, keep simulation slider value
     if (co2Value !== null) setCo2Dining(Math.round(co2Value))
 
     const acValue = readBool(ENTITY_MAP.climate.ac)
@@ -484,15 +558,6 @@ export function HomeDashboard() {
         })
     }
   }, [mode, liveConnected, callHA])
-
-  const setFanState = useCallback((key: FanKey, next: boolean, message?: string) => {
-    setFans(previous => {
-      if (previous[key] === next) return previous
-      return { ...previous, [key]: next }
-    })
-    if (message) addEvent(message, 'auto')
-    pushFanToHA(key, next)
-  }, [pushFanToHA])
 
   const toggleLight = (room: RoomKey, title: string) => {
     const next = !lights[room]
@@ -742,7 +807,6 @@ export function HomeDashboard() {
     } catch (error) {}
   }, [])
 
-  // ================= AUTOMATION ENGINE =================
   // Clean up all timers on unmount
   useEffect(() => {
     return () => {
@@ -754,7 +818,6 @@ export function HomeDashboard() {
     }
   }, [])
 
-  // If automation is turned off, cancel all pending timers
   useEffect(() => {
     if (automation) return
     if (co2EscalationTimerRef.current) { clearTimeout(co2EscalationTimerRef.current); co2EscalationTimerRef.current = null }
@@ -770,7 +833,7 @@ export function HomeDashboard() {
     naturalCoolingActiveRef.current = false
   }, [automation])
 
-  // Rule 1: MQ2 smoke > threshold → exhaustBedroom ON; falls below → OFF
+  // Rule 1
   useEffect(() => {
     if (!automation) return
     if (mq2Bedroom > mq2Threshold) {
@@ -788,35 +851,19 @@ export function HomeDashboard() {
     }
   }, [mq2Bedroom, mq2Threshold, automation, fans.exhaustBedroom, pushFanToHA])
 
-  // Rule 2: CO2 dining > threshold → freshAirFan ON; escalation after 1 min; off timer 3 min
+  // Rule 2
   useEffect(() => {
-    if (!automation) {
-      // Reset all CO2 state when automation off
-      if (co2EscalationTimerRef.current) { clearTimeout(co2EscalationTimerRef.current); co2EscalationTimerRef.current = null }
-      if (co2OffTimerRef.current) { clearTimeout(co2OffTimerRef.current); co2OffTimerRef.current = null }
-      if (co2OffTickRef.current) { clearInterval(co2OffTickRef.current); co2OffTickRef.current = null }
-      setCo2EscalationRemaining(null)
-      setCo2OffRemaining(null)
-      co2EscalationStartedRef.current = false
-      co2OffPendingRef.current = false
-      return
-    }
-
+    if (!automation) return
     if (co2Dining > co2Threshold) {
-      // Cancel off timer if running
       if (co2OffTimerRef.current) { clearTimeout(co2OffTimerRef.current); co2OffTimerRef.current = null }
       if (co2OffTickRef.current) { clearInterval(co2OffTickRef.current); co2OffTickRef.current = null }
       setCo2OffRemaining(null)
       co2OffPendingRef.current = false
-
-      // Turn on fresh air fan
       if (!fans.freshAirFan) {
         setFans(previous => ({ ...previous, freshAirFan: true }))
         addEvent('CO2 phòng ăn vượt ngưỡng → Bật quạt gió tươi', 'auto')
         pushFanToHA('freshAirFan', true)
       }
-
-      // Start 1-minute escalation timer (only once until condition resets)
       if (!co2EscalationStartedRef.current) {
         co2EscalationStartedRef.current = true
         if (co2EscalationTimerRef.current) clearTimeout(co2EscalationTimerRef.current)
@@ -827,26 +874,20 @@ export function HomeDashboard() {
         co2EscalationTimerRef.current = setTimeout(() => {
           clearInterval(tick)
           setCo2EscalationRemaining(null)
-          // After 1 minute, if CO2 still above threshold → turn on exhaustDining
           if (!fans.exhaustDining) {
             setFans(previous => ({ ...previous, exhaustDining: true }))
             addEvent('CO2 phòng ăn không giảm sau 1 phút → Bật thêm quạt hút mùi phòng ăn', 'auto')
             pushFanToHA('exhaustDining', true)
           }
         }, 60000)
-        // store tick for cleanup
         if (co2OffTickRef.current) clearInterval(co2OffTickRef.current)
         co2OffTickRef.current = tick
       }
     } else {
-      // CO2 <= threshold
-      // Cancel escalation timer
       if (co2EscalationTimerRef.current) { clearTimeout(co2EscalationTimerRef.current); co2EscalationTimerRef.current = null }
       if (co2OffTickRef.current) { clearInterval(co2OffTickRef.current); co2OffTickRef.current = null }
       setCo2EscalationRemaining(null)
       co2EscalationStartedRef.current = false
-
-      // If fresh air or exhaust dining are ON, start 3-minute off countdown
       if ((fans.freshAirFan || fans.exhaustDining) && !co2OffPendingRef.current) {
         co2OffPendingRef.current = true
         setCo2OffRemaining(180)
@@ -862,29 +903,19 @@ export function HomeDashboard() {
           pushFanToHA('freshAirFan', false)
           pushFanToHA('exhaustDining', false)
         }, 180000)
-        // store tick
         if (co2OffTickRef.current) clearInterval(co2OffTickRef.current)
         co2OffTickRef.current = tick
       }
     }
   }, [co2Dining, co2Threshold, automation, fans.freshAirFan, fans.exhaustDining, pushFanToHA])
 
-  // Rule 3: Natural cooling — outdoor temp < 28, room temp > 30, presence → freshAirFan 15 min
+  // Rule 3
   useEffect(() => {
-    if (!automation) {
-      if (naturalCoolingTimerRef.current) { clearTimeout(naturalCoolingTimerRef.current); naturalCoolingTimerRef.current = null }
-      if (naturalCoolingTickRef.current) { clearInterval(naturalCoolingTickRef.current); naturalCoolingTickRef.current = null }
-      setNaturalCoolingRemaining(null)
-      naturalCoolingActiveRef.current = false
-      return
-    }
-
+    if (!automation) return
     const outdoorOk = outdoorTemp < 28
     const roomTooHot = grandparentsTemp > 30 || diningTemp > 30
-    // Check presence in corresponding zones (any occupied zone with temp >30)
     const hasPresence = (grandparentsTemp > 30 && presence.phongOngBa) || (diningTemp > 30 && presence.phongAn) || (grandparentsTemp > 30 && presence.phongNgu) || (diningTemp > 30 && presence.bep)
     const shouldActivate = outdoorOk && roomTooHot && hasPresence
-
     if (shouldActivate && !naturalCoolingActiveRef.current) {
       naturalCoolingActiveRef.current = true
       if (!fans.freshAirFan) {
@@ -895,10 +926,7 @@ export function HomeDashboard() {
       setNaturalCoolingRemaining(900)
       const tick = setInterval(() => {
         setNaturalCoolingRemaining(prev => {
-          if (prev === null || prev <= 1) {
-            clearInterval(tick)
-            return 0
-          }
+          if (prev === null || prev <= 1) { clearInterval(tick); return 0 }
           return prev - 1
         })
       }, 1000)
@@ -908,7 +936,6 @@ export function HomeDashboard() {
         clearInterval(tick)
         setNaturalCoolingRemaining(null)
         naturalCoolingActiveRef.current = false
-        // Only turn off if Rule 2 doesn't need it
         if (co2Dining <= co2Threshold) {
           setFans(previous => ({ ...previous, freshAirFan: false }))
           addEvent('Hết 15 phút làm mát tự nhiên → Tắt quạt gió tươi', 'auto')
@@ -916,7 +943,6 @@ export function HomeDashboard() {
         }
       }, 900000)
     } else if (!shouldActivate && naturalCoolingActiveRef.current) {
-      // Conditions no longer met → cancel 15 min window and turn off (unless CO2 needs it)
       if (naturalCoolingTimerRef.current) { clearTimeout(naturalCoolingTimerRef.current); naturalCoolingTimerRef.current = null }
       if (naturalCoolingTickRef.current) { clearInterval(naturalCoolingTickRef.current); naturalCoolingTickRef.current = null }
       setNaturalCoolingRemaining(null)
@@ -929,7 +955,22 @@ export function HomeDashboard() {
     }
   }, [outdoorTemp, grandparentsTemp, diningTemp, presence, automation, co2Dining, co2Threshold, fans.freshAirFan, pushFanToHA])
 
-  // ================= UI =================
+  // Helper to build detail strings for pins
+  const buildPinDetail = (pin: Pin): string | undefined => {
+    if (pin.sensor) {
+      return `${presence[pin.sensor] ? 'Có người · ' : 'Trống · '}${distances[pin.sensor].toFixed(1)} m`
+    }
+    if (pin.fan) return fans[pin.fan] ? 'Đang bật' : 'Đang tắt'
+    if (pin.id === 'ambient') return `${lux} Lux`
+    if (pin.id === 'weather') return `${outdoorTemp.toFixed(1)}° · ${outdoorHum}%`
+    if (pin.id === 'bedroom-climate') return acOn ? '24° · Đang bật' : '27.1° · 64%'
+    if (pin.id === 'an-climate') return `${diningTemp.toFixed(1)}° · ${diningHum}%`
+    if (pin.id === 'living-climate') return `${grandparentsTemp.toFixed(1)}° · ${grandparentsHum}%`
+    if (pin.id === 'garden-climate') return `${outdoorTemp.toFixed(1)}° · ${outdoorHum}%`
+    if (pin.id === 'bedroom-mq2') return `MQ2 · ${mq2Bedroom} ppm${mq2Bedroom > mq2Threshold ? ' ⚠️' : ''}`
+    if (pin.id === 'dining-co2') return `CO2 · ${co2Dining} ppm${co2Dining > co2Threshold ? ' ⚠️' : ''}`
+    return pin.detail
+  }
 
   return (
     <main className="dashboard-shell">
@@ -1016,7 +1057,38 @@ export function HomeDashboard() {
                 )
               })}
               <div className="floor-grid" aria-hidden="true" />
-              {pins.map(pin => <PinButton key={pin.id} pin={pin} lights={lights} presence={presence} fans={fans} lux={lux} editMode={editMode} onLight={toggleLight} onPresence={togglePresence} onFan={toggleFan} onDragStart={handlePinDragStart} acOn={acOn} onAc={() => { const next = !acOn; setAcOn(next); addEvent(`Điều hòa Daikin ${next ? 'đã bật · 24°C' : 'đã tắt'}`); if (mode === 'live' && liveConnected) { callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.ac, action: next ? 'turn_on' : 'turn_off' }) }).catch(error => { const message = error instanceof Error ? error.message : String(error); addEvent(`Không gửi được lệnh điều hòa: ${message}`, 'system') }) } }} outdoorTemp={outdoorTemp} outdoorHum={outdoorHum} grandparentsTemp={grandparentsTemp} grandparentsHum={grandparentsHum} diningTemp={diningTemp} diningHum={diningHum} mq2Bedroom={mq2Bedroom} mq2Threshold={mq2Threshold} co2Dining={co2Dining} co2Threshold={co2Threshold} co2OffRemaining={co2OffRemaining} naturalCoolingRemaining={naturalCoolingRemaining} co2EscalationRemaining={co2EscalationRemaining} />)}
+              {pins.map(pin => (
+                <PinButton
+                  key={pin.id}
+                  pin={pin}
+                  lights={lights}
+                  presence={presence}
+                  fans={fans}
+                  lux={lux}
+                  editMode={editMode}
+                  onLight={toggleLight}
+                  onPresence={togglePresence}
+                  onFan={toggleFan}
+                  onDragStart={handlePinDragStart}
+                  acOn={acOn}
+                  onAc={() => { const next = !acOn; setAcOn(next); addEvent(`Điều hòa Daikin ${next ? 'đã bật · 24°C' : 'đã tắt'}`); if (mode === 'live' && liveConnected) { callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.ac, action: next ? 'turn_on' : 'turn_off' }) }).catch(error => { const message = error instanceof Error ? error.message : String(error); addEvent(`Không gửi được lệnh điều hòa: ${message}`, 'system') }) } }}
+                  outdoorTemp={outdoorTemp}
+                  outdoorHum={outdoorHum}
+                  grandparentsTemp={grandparentsTemp}
+                  grandparentsHum={grandparentsHum}
+                  diningTemp={diningTemp}
+                  diningHum={diningHum}
+                  mq2Bedroom={mq2Bedroom}
+                  mq2Threshold={mq2Threshold}
+                  co2Dining={co2Dining}
+                  co2Threshold={co2Threshold}
+                  co2OffRemaining={co2OffRemaining}
+                  naturalCoolingRemaining={naturalCoolingRemaining}
+                  co2EscalationRemaining={co2EscalationRemaining}
+                  distances={distances}
+                  buildPinDetail={buildPinDetail}
+                />
+              ))}
               <div className="map-compass"><span>N</span><ArrowUpRight size={14} /></div>
               <div className="map-legend"><span><i className="legend-light" /> Đèn đang bật</span><span><i className="legend-presence" /> Có người</span><span><i className="legend-fan" /> Quạt đang bật</span></div>
             </div>
@@ -1053,24 +1125,20 @@ export function HomeDashboard() {
             </section>
             <section className="panel-section environment-section"><div className="section-heading"><div><span className="section-icon sun-section"><Sun size={15} /></span><h3>Môi trường & An toàn</h3></div><button className="text-action" onClick={() => addEvent('Đã đồng bộ dữ liệu môi trường', 'sensor')}>Đồng bộ</button></div>
               <div className="environment-item"><div className="environment-label"><span><Sun size={14} /> Ánh sáng xung quanh</span><strong>{lux} <small>Lux</small> <span className={`day-tag ${isDay ? 'day' : ''}`}>{isDay ? 'NGÀY' : 'ĐÊM'}</span></strong></div><input aria-label="Ánh sáng xung quanh, Lux" type="range" min="0" max="1000" step="10" value={lux} onChange={e => updateLux(Number(e.target.value))} /><div className="range-ends"><span>0 Lux</span><span>1000 Lux</span></div></div>
-
               <div className="environment-item"><div className="environment-label"><span><Thermometer size={14} /> Nhiệt độ sân vườn</span><strong>{outdoorTemp.toFixed(1)}<small>°C</small></strong></div><input aria-label="Nhiệt độ sân vườn" type="range" min="15" max="42" step="0.5" value={outdoorTemp} onChange={e => setOutdoorTemp(Number(e.target.value))} /><div className="range-ends"><span>15°C</span><span>42°C</span></div></div>
               <div className="environment-item"><div className="environment-label"><span><Thermometer size={14} /> Nhiệt độ phòng ông bà</span><strong>{grandparentsTemp.toFixed(1)}<small>°C</small></strong></div><input aria-label="Nhiệt độ phòng ông bà" type="range" min="18" max="40" step="0.5" value={grandparentsTemp} onChange={e => setGrandparentsTemp(Number(e.target.value))} /><div className="range-ends"><span>18°C</span><span>40°C</span></div></div>
               <div className="environment-item"><div className="environment-label"><span><Thermometer size={14} /> Nhiệt độ phòng ăn</span><strong>{diningTemp.toFixed(1)}<small>°C</small></strong></div><input aria-label="Nhiệt độ phòng ăn" type="range" min="18" max="40" step="0.5" value={diningTemp} onChange={e => setDiningTemp(Number(e.target.value))} /><div className="range-ends"><span>18°C</span><span>40°C</span></div></div>
-
               <div className="environment-item"><div className="environment-label"><span><Wind size={14} /> Khói MQ2 phòng ngủ</span><strong>{mq2Bedroom} <small>ppm</small></strong></div><input aria-label="Khói MQ2 phòng ngủ" type="range" min="0" max="1000" step="10" value={mq2Bedroom} onChange={e => setMq2Bedroom(Number(e.target.value))} /><div className="range-ends"><span>0 ppm</span><span>1000 ppm</span></div><div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}><label style={{ fontSize: '11px' }}>Ngưỡng MQ2:</label><input aria-label="Ngưỡng cài đặt MQ2" type="number" min="0" max="1000" step="10" value={mq2Threshold} onChange={e => setMq2Threshold(Number(e.target.value))} style={{ width: '70px', padding: '2px 6px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '12px' }} /><span style={{ fontSize: '11px' }}>ppm</span></div></div>
-
               <div className="environment-item"><div className="environment-label"><span><Wind size={14} /> CO2 phòng ăn</span><strong>{co2Dining} <small>ppm</small></strong></div><input aria-label="CO2 phòng ăn" type="range" min="400" max="2500" step="10" value={co2Dining} onChange={e => setCo2Dining(Number(e.target.value))} /><div className="range-ends"><span>400 ppm</span><span>2500 ppm</span></div><div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}><label style={{ fontSize: '11px' }}>Ngưỡng CO2:</label><input aria-label="Ngưỡng cài đặt CO2" type="number" min="400" max="2500" step="50" value={co2Threshold} onChange={e => setCo2Threshold(Number(e.target.value))} style={{ width: '70px', padding: '2px 6px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '12px' }} /><span style={{ fontSize: '11px' }}>ppm</span></div></div>
-
               {co2EscalationRemaining !== null && <div style={{ fontSize: '12px', color: '#e67e22', marginTop: '4px' }}>⏳ CO2 chưa giảm: bật thêm quạt hút mùi phòng ăn sau {Math.floor(co2EscalationRemaining / 60)}:{String(co2EscalationRemaining % 60).padStart(2, '0')}</div>}
               {co2OffRemaining !== null && <div style={{ fontSize: '12px', color: '#27ae60', marginTop: '4px' }}>⏳ CO2 đạt chuẩn: tắt quạt sau {Math.floor(co2OffRemaining / 60)}:{String(co2OffRemaining % 60).padStart(2, '0')}</div>}
               {naturalCoolingRemaining !== null && <div style={{ fontSize: '12px', color: '#2980b9', marginTop: '4px' }}>🌬️ Làm mát tự nhiên: còn {Math.floor(naturalCoolingRemaining / 60)}:{String(naturalCoolingRemaining % 60).padStart(2, '0')}</div>}
             </section>
             <section className="automation-card"><div className="automation-heading"><div className="automation-icon"><Zap size={16} /></div><div><strong>Tự động hóa thông minh</strong><span>{automation ? 'Đang hoạt động' : 'Đã tạm dừng'}</span></div><button className={`mini-switch ${automation ? 'on' : ''}`} aria-label={`${automation ? 'Tắt' : 'Bật'} tự động hóa`} aria-pressed={automation} onClick={toggleAutomation}><span /></button></div><p>MQ2 &gt; ngưỡng: bật quạt hút mùi phòng ngủ. CO2 &gt; ngưỡng: bật quạt gió tươi, sau 1 phút bật thêm quạt hút mùi phòng ăn; CO2 đạt chuẩn 3 phút tắt cả hai. Trời mát &lt;28°C, phòng &gt;30°C, có người: bật quạt gió tươi 15 phút.</p></section>
             <section className="panel-section devices-section"><div className="section-heading"><div><span className="section-icon device-section"><Zap size={15} /></span><h3>Thiết bị nhanh</h3></div><button className="text-action" onClick={() => addEvent('Đã mở danh sách thiết bị')}>Tất cả <ChevronRight size={12} /></button></div><div className="quick-devices">
-              <button className={`device-tile ${fans.exhaustBedroom ? 'active' : ''}`} onClick={() => toggleFan('exhaustBedroom')}><span className="tile-icon"><Fan size={17} /></span><span><strong>Quạt hút mùi PN</strong><small>{fans.exhaustBedroom ? 'Đang bật' : 'Tắt'}</small></span><ChevronDown size={13} /></button>
-              <button className={`device-tile ${fans.freshAirFan ? 'active' : ''}`} onClick={() => toggleFan('freshAirFan')}><span className="tile-icon"><Fan size={17} /></span><span><strong>Quạt gió tươi</strong><small>{fans.freshAirFan ? 'Đang bật' : 'Tắt'}</small></span><ChevronDown size={13} /></button>
-              <button className={`device-tile ${fans.exhaustDining ? 'active' : ''}`} onClick={() => toggleFan('exhaustDining')}><span className="tile-icon"><Fan size={17} /></span><span><strong>Quạt hút mùi PA</strong><small>{fans.exhaustDining ? 'Đang bật' : 'Tắt'}</small></span><ChevronDown size={13} /></button>
+              <button className={`device-tile ${fans.exhaustBedroom ? 'active' : ''}`} onClick={() => toggleFan('exhaustBedroom')}><span className="tile-icon"><Fan size={17} /></span><span><strong>Hút mùi PN</strong><small>{fans.exhaustBedroom ? 'Đang bật' : 'Tắt'}</small></span><ChevronDown size={13} /></button>
+              <button className={`device-tile ${fans.freshAirFan ? 'active' : ''}`} onClick={() => toggleFan('freshAirFan')}><span className="tile-icon"><Fan size={17} /></span><span><strong>Gió tươi</strong><small>{fans.freshAirFan ? 'Đang bật' : 'Tắt'}</small></span><ChevronDown size={13} /></button>
+              <button className={`device-tile ${fans.exhaustDining ? 'active' : ''}`} onClick={() => toggleFan('exhaustDining')}><span className="tile-icon"><Fan size={17} /></span><span><strong>Hút mùi PA</strong><small>{fans.exhaustDining ? 'Đang bật' : 'Tắt'}</small></span><ChevronDown size={13} /></button>
               <button className={`device-tile ${acOn ? 'active' : ''}`} onClick={() => { const next = !acOn; setAcOn(next); addEvent(`Điều hòa Daikin ${next ? 'đã bật · 24°C' : 'đã tắt'}`); if (mode === 'live' && liveConnected) { callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.ac, action: next ? 'turn_on' : 'turn_off' }) }).catch(error => { const message = error instanceof Error ? error.message : String(error); addEvent(`Không gửi được lệnh điều hòa: ${message}`, 'system') }) } }}><span className="tile-icon"><AirVent size={17} /></span><span><strong>Điều hòa</strong><small>{acOn ? '24°C · Đang bật' : 'Daikin · Tắt'}</small></span><ChevronDown size={13} /></button>
               <button className={`device-tile ${fanOn ? 'active' : ''}`} onClick={() => { const next = !fanOn; setFanOn(next); addEvent(`Quạt trần ${next ? 'đã bật' : 'đã tắt'}`); if (mode === 'live' && liveConnected) { callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.fan, action: next ? 'turn_on' : 'turn_off' }) }).catch(error => { const message = error instanceof Error ? error.message : String(error); addEvent(`Không gửi được lệnh quạt: ${message}`, 'system') }) } }}><span className="tile-icon"><Fan size={17} /></span><span><strong>Quạt trần</strong><small>{fanOn ? 'Đang bật · Mức 2' : 'Phòng khách · Tắt'}</small></span><ChevronDown size={13} /></button>
             </div></section>
@@ -1083,7 +1151,12 @@ export function HomeDashboard() {
   )
 }
 
-function PinButton({ pin, lights, presence, fans, lux, editMode, onLight, onPresence, onFan, onDragStart, acOn, onAc, outdoorTemp, outdoorHum, grandparentsTemp, grandparentsHum, diningTemp, diningHum, mq2Bedroom, mq2Threshold, co2Dining, co2Threshold, co2OffRemaining, naturalCoolingRemaining, co2EscalationRemaining }: {
+function PinButton({
+  pin, lights, presence, fans, lux, editMode, onLight, onPresence, onFan, onDragStart, acOn, onAc,
+  outdoorTemp, outdoorHum, grandparentsTemp, grandparentsHum, diningTemp, diningHum,
+  mq2Bedroom, mq2Threshold, co2Dining, co2Threshold, co2OffRemaining, naturalCoolingRemaining, co2EscalationRemaining,
+  distances, buildPinDetail,
+}: {
   pin: Pin
   lights: Record<RoomKey, boolean>
   presence: Record<SensorKey, boolean>
@@ -1109,37 +1182,107 @@ function PinButton({ pin, lights, presence, fans, lux, editMode, onLight, onPres
   co2OffRemaining: number | null
   naturalCoolingRemaining: number | null
   co2EscalationRemaining: number | null
+  distances: Record<SensorKey, number>
+  buildPinDetail: (pin: Pin) => string | undefined
 }) {
+  const baseStyle: React.CSSProperties = {
+    left: `${pin.x}%`,
+    top: `${pin.y}%`,
+    cursor: editMode ? 'grab' : undefined,
+    touchAction: editMode ? 'none' : undefined,
+  }
+
+  // Group lights card
+  if (pin.kind === 'group-lights' && pin.rooms) {
+    const total = pin.rooms.length
+    const onCount = pin.rooms.filter(r => lights[r]).length
+    const anyOn = onCount > 0
+    const click = () => { if (editMode) return }
+    return (
+      <div
+        className={`map-pin map-pin-card group-lights-card ${anyOn ? 'pin-active' : ''} ${editMode ? 'pin-editable' : ''} pin-${pin.id}`}
+        style={baseStyle}
+        onPointerDown={event => onDragStart(event as unknown as React.PointerEvent<HTMLButtonElement>, pin.id)}
+        title={editMode ? `${pin.title} · x: ${pin.x}, y: ${pin.y}` : pin.title}
+      >
+        <div className="group-header">
+          <span className="group-title">{pin.title}</span>
+          <span className="group-status">{onCount}/{total} bật</span>
+        </div>
+        <div className="group-buttons">
+          {pin.rooms.map(room => (
+            <button
+              key={room}
+              type="button"
+              className={`group-btn ${lights[room] ? 'on' : ''}`}
+              onClick={(e) => { e.stopPropagation(); if (!editMode) onLight(room, ROOM_TITLE[room]) }}
+              title={ROOM_TITLE[room]}
+            >
+              {ROOM_SHORT[room]}
+            </button>
+          ))}
+        </div>
+        {editMode && <span className="pin-coords">{pin.x}% · {pin.y}%</span>}
+      </div>
+    )
+  }
+
+  // Group sensors card
+  if (pin.kind === 'group-sensors' && pin.sensors && pin.sensors.length) {
+    const primary = pin.sensors[0]
+    const occupied = presence[primary]
+    const click = () => { if (editMode) return; onPresence(primary) }
+    const tempVal = pin.id.includes('pn') ? grandparentsTemp : pin.id.includes('pa') ? diningTemp : pin.id.includes('pk') ? grandparentsTemp : outdoorTemp
+    const humVal = pin.id.includes('pn') ? grandparentsHum : pin.id.includes('pa') ? diningHum : pin.id.includes('pk') ? grandparentsHum : outdoorHum
+    // For PN group use grandparent? Actually PN uses bedroom but we don't have bedroom temp; use grandparents as fallback
+    const displayTemp = pin.id === 'group-sensors-pn' ? grandparentsTemp : pin.id === 'group-sensors-pa' ? diningTemp : pin.id === 'group-sensors-pk' ? grandparentsTemp : outdoorTemp
+    const displayHum = pin.id === 'group-sensors-pn' ? grandparentsHum : pin.id === 'group-sensors-pa' ? diningHum : pin.id === 'group-sensors-pk' ? grandparentsHum : outdoorHum
+    const airWarn = pin.showAir && ((pin.id === 'group-sensors-pn' && mq2Bedroom > mq2Threshold) || (pin.id === 'group-sensors-pa' && co2Dining > co2Threshold))
+    return (
+      <div
+        className={`map-pin map-pin-card group-sensors-card ${occupied ? 'pin-detected' : ''} ${airWarn ? 'pin-warning' : ''} ${editMode ? 'pin-editable' : ''} pin-${pin.id}`}
+        style={baseStyle}
+        onPointerDown={event => onDragStart(event as unknown as React.PointerEvent<HTMLButtonElement>, pin.id)}
+        title={editMode ? `${pin.title} · x: ${pin.x}, y: ${pin.y}` : pin.title}
+      >
+        <button type="button" className="group-sensor-presence" onClick={click} title={`Hiện diện ${SENSOR_SHORT[primary]}`}>
+          <Users size={12} />
+          <span>{SENSOR_SHORT[primary]}</span>
+          <span className={`presence-dot ${occupied ? 'on' : ''}`} />
+        </button>
+        {pin.showClimate && (
+          <div className="group-sensor-line">
+            <Thermometer size={10} /> {displayTemp.toFixed(1)}° · {displayHum}%
+          </div>
+        )}
+        {pin.showAir && pin.id === 'group-sensors-pn' && (
+          <div className={`group-sensor-line ${mq2Bedroom > mq2Threshold ? 'warn' : ''}`}>
+            <Wind size={10} /> MQ2: {mq2Bedroom} ppm
+          </div>
+        )}
+        {pin.showAir && pin.id === 'group-sensors-pa' && (
+          <div className={`group-sensor-line ${co2Dining > co2Threshold ? 'warn' : ''}`}>
+            <Wind size={10} /> CO2: {co2Dining} ppm
+          </div>
+        )}
+        {pin.showLux && (
+          <div className="group-sensor-line">
+            <Sun size={10} /> {lux} Lux
+          </div>
+        )}
+        {editMode && <span className="pin-coords">{pin.x}% · {pin.y}%</span>}
+      </div>
+    )
+  }
+
+  // Standard pin
   const fanActive = pin.fan ? fans[pin.fan] : false
   const active = pin.room ? lights[pin.room] : pin.sensor ? presence[pin.sensor] : pin.fan ? fanActive : pin.id === 'bedroom-climate' ? acOn : false
   const icon = pin.kind === 'light' ? <Lightbulb size={13} /> : pin.kind === 'sensor' ? <Users size={13} /> : pin.kind === 'climate' ? <Thermometer size={13} /> : pin.kind === 'door' ? <DoorOpen size={13} /> : pin.kind === 'weather' ? <CloudSun size={13} /> : pin.kind === 'fan' ? <Fan size={13} /> : pin.kind === 'air' ? <Wind size={13} /> : lux > 300 ? <Sun size={13} /> : <Moon size={13} />
-
-  let detail = pin.detail
-  if (pin.sensor) {
-    detail = `${presence[pin.sensor] ? 'Có người · ' : 'Trống · '}${(pin.sensor === 'phongOngBa' ? 1.8 : pin.sensor === 'phongNgu' ? 1.5 : pin.sensor === 'nhaVeSinh' ? 1.2 : 0).toFixed(1)} m`
-  } else if (pin.id === 'ambient') {
-    detail = `${lux} Lux`
-  } else if (pin.id === 'bedroom-climate') {
-    detail = `${acOn ? '24° · Đang bật' : '27.1° · 64%'}`
-  } else if (pin.id === 'an-climate') {
-    detail = `${diningTemp.toFixed(1)}° · ${diningHum}%`
-  } else if (pin.id === 'living-climate') {
-    detail = `${grandparentsTemp.toFixed(1)}° · ${grandparentsHum}%`
-  } else if (pin.id === 'garden-climate') {
-    detail = `${outdoorTemp.toFixed(1)}° · ${outdoorHum}%`
-  } else if (pin.id === 'bedroom-mq2') {
-    detail = `MQ2 · ${mq2Bedroom} ppm${mq2Bedroom > mq2Threshold ? ' ⚠️' : ''}`
-  } else if (pin.id === 'dining-co2') {
-    detail = `CO2 · ${co2Dining} ppm${co2Dining > co2Threshold ? ' ⚠️' : ''}`
-  } else if (pin.fan) {
-    detail = fanActive ? 'Đang bật' : 'Đang tắt'
-  }
-
+  const detail = buildPinDetail(pin)
   const isAirWarning = (pin.id === 'bedroom-mq2' && mq2Bedroom > mq2Threshold) || (pin.id === 'dining-co2' && co2Dining > co2Threshold)
-
   const click = () => { if (editMode) return; if (pin.room) onLight(pin.room, pin.title); else if (pin.sensor) onPresence(pin.sensor); else if (pin.fan) onFan(pin.fan); else if (pin.id === 'bedroom-climate') onAc() }
 
-  // Show small countdown badge on relevant fan pins
   let countdownText: string | null = null
   if (pin.fan === 'freshAirFan' && naturalCoolingRemaining !== null) {
     countdownText = `${Math.floor(naturalCoolingRemaining / 60)}:${String(naturalCoolingRemaining % 60).padStart(2, '0')}`
@@ -1151,5 +1294,25 @@ function PinButton({ pin, lights, presence, fans, lux, editMode, onLight, onPres
     countdownText = `Tắt sau ${Math.floor(co2OffRemaining / 60)}:${String(co2OffRemaining % 60).padStart(2, '0')}`
   }
 
-  return <button type="button" className={`map-pin pin-${pin.kind} ${active ? 'pin-active' : ''} ${pin.sensor && active ? 'pin-detected' : ''} ${isAirWarning ? 'pin-warning' : ''} ${editMode ? 'pin-editable' : ''} pin-${pin.id}`} style={{ left: `${pin.x}%`, top: `${pin.y}%`, cursor: editMode ? 'grab' : undefined, touchAction: editMode ? 'none' : undefined }} onClick={click} onPointerDown={event => onDragStart(event, pin.id)} aria-label={`${pin.title}${detail ? `, ${detail}` : ''}${editMode ? ', kéo để di chuyển' : pin.room || pin.sensor || pin.fan || pin.id === 'bedroom-climate' ? ', nhấn để điều khiển' : ''}`} aria-pressed={pin.room || pin.sensor || pin.fan || pin.id === 'bedroom-climate' ? active : undefined} title={editMode ? `${pin.title} · x: ${pin.x}, y: ${pin.y}` : pin.title}><span className="pin-icon">{icon}</span><span className="pin-copy"><strong>{pin.title}</strong>{detail && <small>{detail}</small>}{countdownText && <small style={{ color: '#e67e22', fontWeight: 600 }}>⏳ {countdownText}</small>}{editMode && <small className="pin-coords">{pin.x}% · {pin.y}%</small>}</span>{active && (pin.kind === 'light' || pin.kind === 'fan') && <span className="pin-status" />}</button>
+  return (
+    <button
+      type="button"
+      className={`map-pin pin-${pin.kind} ${active ? 'pin-active' : ''} ${pin.sensor && active ? 'pin-detected' : ''} ${isAirWarning ? 'pin-warning' : ''} ${editMode ? 'pin-editable' : ''} pin-${pin.id}`}
+      style={baseStyle}
+      onClick={click}
+      onPointerDown={event => onDragStart(event, pin.id)}
+      aria-label={`${pin.title}${detail ? `, ${detail}` : ''}${editMode ? ', kéo để di chuyển' : pin.room || pin.sensor || pin.fan || pin.id === 'bedroom-climate' ? ', nhấn để điều khiển' : ''}`}
+      aria-pressed={pin.room || pin.sensor || pin.fan || pin.id === 'bedroom-climate' ? active : undefined}
+      title={editMode ? `${pin.title} · x: ${pin.x}, y: ${pin.y}` : pin.title}
+    >
+      <span className="pin-icon">{icon}</span>
+      <span className="pin-copy">
+        <strong>{pin.title}</strong>
+        {detail && <small>{detail}</small>}
+        {countdownText && <small style={{ color: '#e67e22', fontWeight: 600 }}>⏳ {countdownText}</small>}
+        {editMode && <small className="pin-coords">{pin.x}% · {pin.y}%</small>}
+      </span>
+      {active && (pin.kind === 'light' || pin.kind === 'fan') && <span className="pin-status" />}
+    </button>
+  )
 }
