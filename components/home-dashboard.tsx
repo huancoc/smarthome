@@ -34,8 +34,7 @@ type SensorKey =
 // Exhaust / fresh-air fan keys
 type FanKey = 'exhaustBedroom' | 'freshAirFan' | 'exhaustDining'
 
-// Pin kinds: original ones + group kinds
-type PinKind = 'light' | 'sensor' | 'climate' | 'door' | 'weather' | 'ambient' | 'fan' | 'air' | 'group-lights' | 'group-sensors'
+type PinKind = 'light' | 'sensor' | 'climate' | 'door' | 'weather' | 'ambient' | 'fan' | 'air'
 
 type Pin = {
   id: string
@@ -46,12 +45,6 @@ type Pin = {
   room?: RoomKey
   sensor?: SensorKey
   fan?: FanKey
-  // Group pins
-  rooms?: RoomKey[]        // for group-lights
-  sensors?: SensorKey[]    // for group-sensors
-  showAir?: boolean        // for group-sensors: show MQ2/CO2
-  showLux?: boolean        // for group-sensors: show lux
-  showClimate?: boolean    // for group-sensors: show temp/hum
   detail?: string
 }
 type Mode = 'demo' | 'live'
@@ -123,103 +116,120 @@ const ENTITY_MAP = {
 
 const floorImage = '/floor-plan/bg.jpg'
 
-const roomLightImages: Record<RoomKey, string | null> = {
-  kho: '/floor-plan/kho.png',
-  bep: '/floor-plan/bep.png',
-  veSinh: null,
-  phongAn: '/floor-plan/phong-an.png',
-  khach: '/floor-plan/phong-ong-ba.png',
-  hienTrai: '/floor-plan/he-trai.png',
-  hienPhai: '/floor-plan/he-phai.png',
-  sanBe: '/floor-plan/san-be.png',
-  cuaBuong: '/floor-plan/cua-buong.png',
-  denTranh: '/floor-plan/den-tranh.png',
-  warmDownlight: '/floor-plan/warm-downlight.png',
-  whiteDownlight: '/floor-plan/white-downlight.png',
-  yeelightPN: '/floor-plan/yeelight-PN.png',
-  sanVuon: '/floor-plan/san-vuon.png',
-  denCong: '/floor-plan/den-cong.png',
-}
+// All light layers including the new /floor-plan/wc.png
+const lightLayers: Array<{ room: RoomKey; src: string }> = [
+  { room: 'kho', src: '/floor-plan/kho.png' },
+  { room: 'bep', src: '/floor-plan/bep.png' },
+  { room: 'veSinh', src: '/floor-plan/wc.png' },
+  { room: 'phongAn', src: '/floor-plan/phong-an.png' },
+  { room: 'khach', src: '/floor-plan/phong-ong-ba.png' },
+  { room: 'hienTrai', src: '/floor-plan/he-trai.png' },
+  { room: 'hienPhai', src: '/floor-plan/he-phai.png' },
+  { room: 'sanBe', src: '/floor-plan/san-be.png' },
+  { room: 'cuaBuong', src: '/floor-plan/cua-buong.png' },
+  { room: 'denTranh', src: '/floor-plan/den-tranh.png' },
+  { room: 'warmDownlight', src: '/floor-plan/warm-downlight.png' },
+  { room: 'whiteDownlight', src: '/floor-plan/white-downlight.png' },
+  { room: 'yeelightPN', src: '/floor-plan/yeelight-PN.png' },
+  { room: 'sanVuon', src: '/floor-plan/san-vuon.png' },
+  { room: 'denCong', src: '/floor-plan/den-cong.png' },
+]
 
-// Short names for rooms/lights
-const ROOM_SHORT: Record<RoomKey, string> = {
-  kho: 'Kho',
-  bep: 'Bếp',
-  veSinh: 'WC',
-  phongAn: 'PA',
-  khach: 'PK',
-  hienTrai: 'Hiên trái',
-  hienPhai: 'Hiên phải',
-  sanBe: 'SB',
-  cuaBuong: 'Cửa',
-  denTranh: 'Tranh',
-  warmDownlight: 'Vàng',
-  whiteDownlight: 'Trắng',
-  yeelightPN: 'Yeelight',
-  sanVuon: 'Sân vườn',
-  denCong: 'Cổng',
-}
-
+// Short names for lights (single pins)
 const ROOM_TITLE: Record<RoomKey, string> = {
   kho: 'Đèn Kho',
   bep: 'Đèn Bếp',
   veSinh: 'Đèn WC',
   phongAn: 'Đèn PA',
   khach: 'Đèn PK',
-  hienTrai: 'Đèn Hiên trái',
-  hienPhai: 'Đèn Hiên phải',
+  hienTrai: 'Hiên trái',
+  hienPhai: 'Hiên phải',
   sanBe: 'Đèn SB',
-  cuaBuong: 'Đèn Cửa buồng',
-  denTranh: 'Đèn Tranh',
+  cuaBuong: 'Cửa buồng',
+  denTranh: 'Đèn tranh',
   warmDownlight: 'Downlight vàng',
   whiteDownlight: 'Downlight trắng',
   yeelightPN: 'Yeelight PN',
-  sanVuon: 'Đèn Sân vườn',
-  denCong: 'Đèn Cổng',
+  sanVuon: 'Đèn SV',
+  denCong: 'Đèn cổng',
 }
 
-// Pin map: short labels, grouped lights, grouped sensors
+const SENSOR_SHORT: Record<SensorKey, string> = {
+  sanVuon: 'SV',
+  phongOngBa: 'PK',
+  nhaVeSinh: 'WC',
+  bep: 'Bếp',
+  phongAn: 'PA',
+  sanBe: 'SB',
+  hienNha: 'Hiên',
+  phongNgu: 'PN',
+}
+
+const SENSOR_LABELS: Record<SensorKey, string> = {
+  sanVuon: 'Sân vườn',
+  phongOngBa: 'Phòng ông bà',
+  nhaVeSinh: 'Nhà vệ sinh',
+  bep: 'Bếp',
+  phongAn: 'Phòng ăn',
+  sanBe: 'Sân bể',
+  hienNha: 'Hiên nhà',
+  phongNgu: 'Phòng ngủ',
+}
+
+const FAN_LABELS: Record<FanKey, string> = {
+  exhaustBedroom: 'Quạt hút mùi phòng ngủ',
+  freshAirFan: 'Quạt gió tươi',
+  exhaustDining: 'Quạt hút mùi phòng ăn',
+}
+
+// All pins are individual map-pins (no group/cluster cards)
 const initialPins: Pin[] = [
-  // Single lights
+  // Lights - single pins
   { id: 'kho', x: 25, y: 25, title: 'Đèn Kho', kind: 'light', room: 'kho' },
   { id: 'bep', x: 25, y: 50, title: 'Đèn Bếp', kind: 'light', room: 'bep' },
   { id: 'an', x: 24.4, y: 67.9, title: 'Đèn PA', kind: 'light', room: 'phongAn' },
   { id: 'wc', x: 42.7, y: 13.4, title: 'Đèn WC', kind: 'light', room: 'veSinh' },
   { id: 'living', x: 55, y: 30, title: 'Đèn PK', kind: 'light', room: 'khach' },
   { id: 'yard', x: 46.8, y: 34.5, title: 'Đèn SB', kind: 'light', room: 'sanBe' },
-  { id: 'door', x: 75.3, y: 38.1, title: 'Cửa buồng · RFID', kind: 'door', room: 'cuaBuong' },
+  { id: 'door', x: 75.3, y: 38.1, title: 'Cửa buồng', kind: 'door', room: 'cuaBuong' },
+  { id: 'bedroom-light', x: 81.8, y: 8.5, title: 'Đèn tranh', kind: 'light', room: 'denTranh' },
+  { id: 'warm-downlight', x: 79.5, y: 16.5, title: 'Downlight vàng', kind: 'light', room: 'warmDownlight' },
+  { id: 'white-downlight', x: 83.5, y: 23.5, title: 'Downlight trắng', kind: 'light', room: 'whiteDownlight' },
+  { id: 'yeelight-pn', x: 87.5, y: 16.5, title: 'Yeelight PN', kind: 'light', room: 'yeelightPN' },
+  { id: 'porch-left', x: 58.4, y: 53.5, title: 'Hiên trái', kind: 'light', room: 'hienTrai' },
+  { id: 'porch-right', x: 68.2, y: 52.8, title: 'Hiên phải', kind: 'light', room: 'hienPhai' },
+  { id: 'garden', x: 85.2, y: 62.4, title: 'Đèn SV', kind: 'light', room: 'sanVuon' },
+  { id: 'gate', x: 84.9, y: 86.1, title: 'Đèn cổng', kind: 'light', room: 'denCong' },
 
-  // Group lights - PN (4 lights)
-  { id: 'group-lights-pn', x: 82.5, y: 18.5, title: 'Nhóm Đèn PN', kind: 'group-lights', rooms: ['denTranh', 'warmDownlight', 'whiteDownlight', 'yeelightPN'] },
-  // Group lights - Hiên (2 lights)
-  { id: 'group-lights-hien', x: 63.5, y: 49.5, title: 'Nhóm Đèn Hiên', kind: 'group-lights', rooms: ['hienTrai', 'hienPhai'] },
-  // Group lights - Ngoài trời (Sân vườn + Cổng)
-  { id: 'group-lights-outdoor', x: 85.5, y: 76.5, title: 'Nhóm Đèn SV', kind: 'group-lights', rooms: ['sanVuon', 'denCong'] },
-
-  // Group sensors - PN (presence + temp/hum + MQ2)
-  { id: 'group-sensors-pn', x: 88.5, y: 36.5, title: 'PN', kind: 'group-sensors', sensors: ['phongNgu'], showClimate: true, showAir: true },
-  // Group sensors - PA (presence + temp/hum + CO2)
-  { id: 'group-sensors-pa', x: 30.5, y: 78.5, title: 'PA', kind: 'group-sensors', sensors: ['phongAn'], showClimate: true, showAir: true },
-  // Group sensors - PK (presence + temp/hum)
-  { id: 'group-sensors-pk', x: 66.5, y: 32.5, title: 'PK', kind: 'group-sensors', sensors: ['phongOngBa'], showClimate: true },
-  // Group sensors - SV (presence + temp/hum + lux)
-  { id: 'group-sensors-sv', x: 87.5, y: 64.5, title: 'SV', kind: 'group-sensors', sensors: ['sanVuon'], showClimate: true, showLux: true },
-
-  // Single presence sensors
+  // Presence sensors - single pins
+  { id: 'pn-presence', x: 86.5, y: 30.5, title: 'PN', kind: 'sensor', sensor: 'phongNgu' },
+  { id: 'pk-presence', x: 63.6, y: 27.8, title: 'PK', kind: 'sensor', sensor: 'phongOngBa' },
+  { id: 'pa-presence', x: 31.5, y: 64.5, title: 'PA', kind: 'sensor', sensor: 'phongAn' },
+  { id: 'bep-presence', x: 28.5, y: 43.5, title: 'Bếp', kind: 'sensor', sensor: 'bep' },
   { id: 'wc-presence', x: 42.2, y: 4.8, title: 'WC', kind: 'sensor', sensor: 'nhaVeSinh' },
-  { id: 'kitchen-presence', x: 28.5, y: 43.5, title: 'Bếp', kind: 'sensor', sensor: 'bep' },
-  { id: 'yard-presence', x: 52.5, y: 37.5, title: 'SB', kind: 'sensor', sensor: 'sanBe' },
-  { id: 'porch-presence', x: 62.5, y: 57.5, title: 'Hiên', kind: 'sensor', sensor: 'hienNha' },
+  { id: 'sb-presence', x: 52.5, y: 37.5, title: 'SB', kind: 'sensor', sensor: 'sanBe' },
+  { id: 'sv-presence', x: 90.5, y: 68.5, title: 'SV', kind: 'sensor', sensor: 'sanVuon' },
+  { id: 'hien-presence', x: 62.5, y: 57.5, title: 'Hiên', kind: 'sensor', sensor: 'hienNha' },
 
-  // Fans
-  { id: 'dining-fan', x: 20.5, y: 76.5, title: 'Hút mùi PA', kind: 'fan', fan: 'exhaustDining' },
-  { id: 'bedroom-fan', x: 92.5, y: 42.5, title: 'Hút mùi PN', kind: 'fan', fan: 'exhaustBedroom' },
-  { id: 'fresh-air-fan', x: 58.5, y: 42.5, title: 'Gió tươi', kind: 'fan', fan: 'freshAirFan' },
+  // Climate - temp/humidity (short titles)
+  { id: 'pn-climate', x: 83, y: 39, title: 'PN', kind: 'climate', detail: '27.1° · 64%' },
+  { id: 'pk-climate', x: 70, y: 25, title: 'PK', kind: 'climate', detail: '28.2° · 72%' },
+  { id: 'pa-climate', x: 28.6, y: 88.7, title: 'PA', kind: 'climate', detail: '26.4° · 68%' },
+  { id: 'sv-climate', x: 77.5, y: 66.5, title: 'SV', kind: 'climate', detail: '31.0° · 76%' },
 
-  // Climate AC + Weather + ambient
-  { id: 'bedroom-climate', x: 76.5, y: 34.5, title: 'Điều hòa', kind: 'climate' },
+  // Air quality
+  { id: 'bedroom-mq2', x: 90.5, y: 33.5, title: 'MQ2 PN', kind: 'air', detail: '120 ppm' },
+  { id: 'dining-co2', x: 33.5, y: 78.5, title: 'CO2 PA', kind: 'air', detail: '650 ppm' },
   { id: 'ambient', x: 92, y: 25, title: 'Ánh sáng', kind: 'ambient' },
   { id: 'weather', x: 94, y: 9, title: 'Thời tiết', kind: 'weather', detail: '31° · 76%' },
+
+  // Fans
+  { id: 'bedroom-fan', x: 90.2, y: 44.5, title: 'Hút mùi PN', kind: 'fan', fan: 'exhaustBedroom' },
+  { id: 'fresh-air-fan', x: 63.5, y: 41.5, title: 'Gió tươi', kind: 'fan', fan: 'freshAirFan' },
+  { id: 'dining-fan', x: 20.5, y: 76.5, title: 'Hút mùi PA', kind: 'fan', fan: 'exhaustDining' },
+
+  // AC
+  { id: 'bedroom-ac', x: 76.5, y: 34.5, title: 'Điều hòa', kind: 'climate' },
 ]
 
 const initialLights: Record<RoomKey, boolean> = {
@@ -264,34 +274,6 @@ const initialDistances: Record<SensorKey, number> = {
   phongNgu: 1.5,
 }
 
-const SENSOR_LABELS: Record<SensorKey, string> = {
-  sanVuon: 'Sân vườn',
-  phongOngBa: 'Phòng ông bà',
-  nhaVeSinh: 'Nhà vệ sinh',
-  bep: 'Bếp',
-  phongAn: 'Phòng ăn',
-  sanBe: 'Sân bể',
-  hienNha: 'Hiên nhà',
-  phongNgu: 'Phòng ngủ',
-}
-
-const SENSOR_SHORT: Record<SensorKey, string> = {
-  sanVuon: 'SV',
-  phongOngBa: 'PK',
-  nhaVeSinh: 'WC',
-  bep: 'Bếp',
-  phongAn: 'PA',
-  sanBe: 'SB',
-  hienNha: 'Hiên',
-  phongNgu: 'PN',
-}
-
-const FAN_LABELS: Record<FanKey, string> = {
-  exhaustBedroom: 'Quạt hút mùi phòng ngủ',
-  freshAirFan: 'Quạt gió tươi',
-  exhaustDining: 'Quạt hút mùi phòng ăn',
-}
-
 function timeLabel() { return new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date()) }
 
 function pinsToCode(pins: Pin[]) {
@@ -300,11 +282,6 @@ function pinsToCode(pins: Pin[]) {
     if (pin.room) parts.push(`room: '${pin.room}'`)
     if (pin.sensor) parts.push(`sensor: '${pin.sensor}'`)
     if (pin.fan) parts.push(`fan: '${pin.fan}'`)
-    if (pin.rooms) parts.push(`rooms: [${pin.rooms.map(r => `'${r}'`).join(', ')}]`)
-    if (pin.sensors) parts.push(`sensors: [${pin.sensors.map(s => `'${s}'`).join(', ')}]`)
-    if (pin.showAir) parts.push(`showAir: true`)
-    if (pin.showLux) parts.push(`showLux: true`)
-    if (pin.showClimate) parts.push(`showClimate: true`)
     if (pin.detail) parts.push(`detail: '${pin.detail.replace(/'/g, "\\'")}'`)
     return `  { ${parts.join(', ')} },`
   })
@@ -364,7 +341,6 @@ export function HomeDashboard() {
   const dragStateRef = useRef<{ id: string | null }>({ id: null })
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  // Automation timing refs
   const co2EscalationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const co2OffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const co2OffTickRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -955,23 +931,6 @@ export function HomeDashboard() {
     }
   }, [outdoorTemp, grandparentsTemp, diningTemp, presence, automation, co2Dining, co2Threshold, fans.freshAirFan, pushFanToHA])
 
-  // Helper to build detail strings for pins
-  const buildPinDetail = (pin: Pin): string | undefined => {
-    if (pin.sensor) {
-      return `${presence[pin.sensor] ? 'Có người · ' : 'Trống · '}${distances[pin.sensor].toFixed(1)} m`
-    }
-    if (pin.fan) return fans[pin.fan] ? 'Đang bật' : 'Đang tắt'
-    if (pin.id === 'ambient') return `${lux} Lux`
-    if (pin.id === 'weather') return `${outdoorTemp.toFixed(1)}° · ${outdoorHum}%`
-    if (pin.id === 'bedroom-climate') return acOn ? '24° · Đang bật' : '27.1° · 64%'
-    if (pin.id === 'an-climate') return `${diningTemp.toFixed(1)}° · ${diningHum}%`
-    if (pin.id === 'living-climate') return `${grandparentsTemp.toFixed(1)}° · ${grandparentsHum}%`
-    if (pin.id === 'garden-climate') return `${outdoorTemp.toFixed(1)}° · ${outdoorHum}%`
-    if (pin.id === 'bedroom-mq2') return `MQ2 · ${mq2Bedroom} ppm${mq2Bedroom > mq2Threshold ? ' ⚠️' : ''}`
-    if (pin.id === 'dining-co2') return `CO2 · ${co2Dining} ppm${co2Dining > co2Threshold ? ' ⚠️' : ''}`
-    return pin.detail
-  }
-
   return (
     <main className="dashboard-shell">
       <header className="topbar">
@@ -1013,49 +972,25 @@ export function HomeDashboard() {
                   }}
                 />
               )}
-              {(Object.keys(roomLightImages) as RoomKey[]).map(room => {
-                const src = roomLightImages[room]
-                if (!src) {
-                  return (
-                    <div
-                      key={room}
-                      aria-hidden="true"
-                      style={{
-                        position: 'absolute',
-                        inset: 0,
-                        width: '100%',
-                        height: '100%',
-                        pointerEvents: 'none',
-                        background: lights[room]
-                          ? 'radial-gradient(circle at 42.7% 13.4%, rgba(255, 236, 140, 0.55) 0%, rgba(255, 236, 140, 0.25) 12%, rgba(255, 236, 140, 0.08) 22%, transparent 34%)'
-                          : 'transparent',
-                        transition: 'opacity 0.3s ease',
-                        opacity: lights[room] ? 1 : 0,
-                        mixBlendMode: 'lighten',
-                      }}
-                    />
-                  )
-                }
-                return (
-                  <img
-                    key={room}
-                    src={src}
-                    alt=""
-                    aria-hidden="true"
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      pointerEvents: 'none',
-                      mixBlendMode: 'lighten',
-                      transition: 'opacity 0.3s ease',
-                      opacity: lights[room] ? 1 : 0,
-                    }}
-                  />
-                )
-              })}
+              {lightLayers.map(layer => (
+                <img
+                  key={layer.room}
+                  src={layer.src}
+                  alt=""
+                  aria-hidden="true"
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    pointerEvents: 'none',
+                    mixBlendMode: 'lighten',
+                    transition: 'opacity 0.3s ease',
+                    opacity: lights[layer.room] ? 1 : 0,
+                  }}
+                />
+              ))}
               <div className="floor-grid" aria-hidden="true" />
               {pins.map(pin => (
                 <PinButton
@@ -1086,7 +1021,6 @@ export function HomeDashboard() {
                   naturalCoolingRemaining={naturalCoolingRemaining}
                   co2EscalationRemaining={co2EscalationRemaining}
                   distances={distances}
-                  buildPinDetail={buildPinDetail}
                 />
               ))}
               <div className="map-compass"><span>N</span><ArrowUpRight size={14} /></div>
@@ -1155,7 +1089,7 @@ function PinButton({
   pin, lights, presence, fans, lux, editMode, onLight, onPresence, onFan, onDragStart, acOn, onAc,
   outdoorTemp, outdoorHum, grandparentsTemp, grandparentsHum, diningTemp, diningHum,
   mq2Bedroom, mq2Threshold, co2Dining, co2Threshold, co2OffRemaining, naturalCoolingRemaining, co2EscalationRemaining,
-  distances, buildPinDetail,
+  distances,
 }: {
   pin: Pin
   lights: Record<RoomKey, boolean>
@@ -1183,105 +1117,45 @@ function PinButton({
   naturalCoolingRemaining: number | null
   co2EscalationRemaining: number | null
   distances: Record<SensorKey, number>
-  buildPinDetail: (pin: Pin) => string | undefined
 }) {
-  const baseStyle: React.CSSProperties = {
-    left: `${pin.x}%`,
-    top: `${pin.y}%`,
-    cursor: editMode ? 'grab' : undefined,
-    touchAction: editMode ? 'none' : undefined,
-  }
-
-  // Group lights card
-  if (pin.kind === 'group-lights' && pin.rooms) {
-    const total = pin.rooms.length
-    const onCount = pin.rooms.filter(r => lights[r]).length
-    const anyOn = onCount > 0
-    const click = () => { if (editMode) return }
-    return (
-      <div
-        className={`map-pin map-pin-card group-lights-card ${anyOn ? 'pin-active' : ''} ${editMode ? 'pin-editable' : ''} pin-${pin.id}`}
-        style={baseStyle}
-        onPointerDown={event => onDragStart(event as unknown as React.PointerEvent<HTMLButtonElement>, pin.id)}
-        title={editMode ? `${pin.title} · x: ${pin.x}, y: ${pin.y}` : pin.title}
-      >
-        <div className="group-header">
-          <span className="group-title">{pin.title}</span>
-          <span className="group-status">{onCount}/{total} bật</span>
-        </div>
-        <div className="group-buttons">
-          {pin.rooms.map(room => (
-            <button
-              key={room}
-              type="button"
-              className={`group-btn ${lights[room] ? 'on' : ''}`}
-              onClick={(e) => { e.stopPropagation(); if (!editMode) onLight(room, ROOM_TITLE[room]) }}
-              title={ROOM_TITLE[room]}
-            >
-              {ROOM_SHORT[room]}
-            </button>
-          ))}
-        </div>
-        {editMode && <span className="pin-coords">{pin.x}% · {pin.y}%</span>}
-      </div>
-    )
-  }
-
-  // Group sensors card
-  if (pin.kind === 'group-sensors' && pin.sensors && pin.sensors.length) {
-    const primary = pin.sensors[0]
-    const occupied = presence[primary]
-    const click = () => { if (editMode) return; onPresence(primary) }
-    const tempVal = pin.id.includes('pn') ? grandparentsTemp : pin.id.includes('pa') ? diningTemp : pin.id.includes('pk') ? grandparentsTemp : outdoorTemp
-    const humVal = pin.id.includes('pn') ? grandparentsHum : pin.id.includes('pa') ? diningHum : pin.id.includes('pk') ? grandparentsHum : outdoorHum
-    // For PN group use grandparent? Actually PN uses bedroom but we don't have bedroom temp; use grandparents as fallback
-    const displayTemp = pin.id === 'group-sensors-pn' ? grandparentsTemp : pin.id === 'group-sensors-pa' ? diningTemp : pin.id === 'group-sensors-pk' ? grandparentsTemp : outdoorTemp
-    const displayHum = pin.id === 'group-sensors-pn' ? grandparentsHum : pin.id === 'group-sensors-pa' ? diningHum : pin.id === 'group-sensors-pk' ? grandparentsHum : outdoorHum
-    const airWarn = pin.showAir && ((pin.id === 'group-sensors-pn' && mq2Bedroom > mq2Threshold) || (pin.id === 'group-sensors-pa' && co2Dining > co2Threshold))
-    return (
-      <div
-        className={`map-pin map-pin-card group-sensors-card ${occupied ? 'pin-detected' : ''} ${airWarn ? 'pin-warning' : ''} ${editMode ? 'pin-editable' : ''} pin-${pin.id}`}
-        style={baseStyle}
-        onPointerDown={event => onDragStart(event as unknown as React.PointerEvent<HTMLButtonElement>, pin.id)}
-        title={editMode ? `${pin.title} · x: ${pin.x}, y: ${pin.y}` : pin.title}
-      >
-        <button type="button" className="group-sensor-presence" onClick={click} title={`Hiện diện ${SENSOR_SHORT[primary]}`}>
-          <Users size={12} />
-          <span>{SENSOR_SHORT[primary]}</span>
-          <span className={`presence-dot ${occupied ? 'on' : ''}`} />
-        </button>
-        {pin.showClimate && (
-          <div className="group-sensor-line">
-            <Thermometer size={10} /> {displayTemp.toFixed(1)}° · {displayHum}%
-          </div>
-        )}
-        {pin.showAir && pin.id === 'group-sensors-pn' && (
-          <div className={`group-sensor-line ${mq2Bedroom > mq2Threshold ? 'warn' : ''}`}>
-            <Wind size={10} /> MQ2: {mq2Bedroom} ppm
-          </div>
-        )}
-        {pin.showAir && pin.id === 'group-sensors-pa' && (
-          <div className={`group-sensor-line ${co2Dining > co2Threshold ? 'warn' : ''}`}>
-            <Wind size={10} /> CO2: {co2Dining} ppm
-          </div>
-        )}
-        {pin.showLux && (
-          <div className="group-sensor-line">
-            <Sun size={10} /> {lux} Lux
-          </div>
-        )}
-        {editMode && <span className="pin-coords">{pin.x}% · {pin.y}%</span>}
-      </div>
-    )
-  }
-
-  // Standard pin
   const fanActive = pin.fan ? fans[pin.fan] : false
-  const active = pin.room ? lights[pin.room] : pin.sensor ? presence[pin.sensor] : pin.fan ? fanActive : pin.id === 'bedroom-climate' ? acOn : false
+  const active = pin.room ? lights[pin.room] : pin.sensor ? presence[pin.sensor] : pin.fan ? fanActive : pin.id === 'bedroom-ac' ? acOn : false
   const icon = pin.kind === 'light' ? <Lightbulb size={13} /> : pin.kind === 'sensor' ? <Users size={13} /> : pin.kind === 'climate' ? <Thermometer size={13} /> : pin.kind === 'door' ? <DoorOpen size={13} /> : pin.kind === 'weather' ? <CloudSun size={13} /> : pin.kind === 'fan' ? <Fan size={13} /> : pin.kind === 'air' ? <Wind size={13} /> : lux > 300 ? <Sun size={13} /> : <Moon size={13} />
-  const detail = buildPinDetail(pin)
+
+  let detail: string | undefined = pin.detail
+  if (pin.sensor) {
+    detail = `${presence[pin.sensor] ? 'Có người · ' : 'Trống · '}${distances[pin.sensor].toFixed(1)} m`
+  } else if (pin.fan) {
+    detail = fanActive ? 'Đang bật' : 'Đang tắt'
+  } else if (pin.id === 'ambient') {
+    detail = `${lux} Lux`
+  } else if (pin.id === 'bedroom-ac') {
+    detail = acOn ? '24° · Đang bật' : 'Đang tắt'
+  } else if (pin.id === 'pn-climate') {
+    detail = `${grandparentsTemp.toFixed(1)}° · ${grandparentsHum}%`
+  } else if (pin.id === 'pk-climate') {
+    detail = `${grandparentsTemp.toFixed(1)}° · ${grandparentsHum}%`
+  } else if (pin.id === 'pa-climate') {
+    detail = `${diningTemp.toFixed(1)}° · ${diningHum}%`
+  } else if (pin.id === 'sv-climate') {
+    detail = `${outdoorTemp.toFixed(1)}° · ${outdoorHum}%`
+  } else if (pin.id === 'bedroom-mq2') {
+    detail = `${mq2Bedroom} ppm${mq2Bedroom > mq2Threshold ? ' ⚠️' : ''}`
+  } else if (pin.id === 'dining-co2') {
+    detail = `${co2Dining} ppm${co2Dining > co2Threshold ? ' ⚠️' : ''}`
+  } else if (pin.id === 'weather') {
+    detail = `${outdoorTemp.toFixed(1)}° · ${outdoorHum}%`
+  }
+
   const isAirWarning = (pin.id === 'bedroom-mq2' && mq2Bedroom > mq2Threshold) || (pin.id === 'dining-co2' && co2Dining > co2Threshold)
-  const click = () => { if (editMode) return; if (pin.room) onLight(pin.room, pin.title); else if (pin.sensor) onPresence(pin.sensor); else if (pin.fan) onFan(pin.fan); else if (pin.id === 'bedroom-climate') onAc() }
+
+  const click = () => {
+    if (editMode) return
+    if (pin.room) onLight(pin.room, pin.title)
+    else if (pin.sensor) onPresence(pin.sensor)
+    else if (pin.fan) onFan(pin.fan)
+    else if (pin.id === 'bedroom-ac') onAc()
+  }
 
   let countdownText: string | null = null
   if (pin.fan === 'freshAirFan' && naturalCoolingRemaining !== null) {
@@ -1298,11 +1172,11 @@ function PinButton({
     <button
       type="button"
       className={`map-pin pin-${pin.kind} ${active ? 'pin-active' : ''} ${pin.sensor && active ? 'pin-detected' : ''} ${isAirWarning ? 'pin-warning' : ''} ${editMode ? 'pin-editable' : ''} pin-${pin.id}`}
-      style={baseStyle}
+      style={{ left: `${pin.x}%`, top: `${pin.y}%`, cursor: editMode ? 'grab' : undefined, touchAction: editMode ? 'none' : undefined }}
       onClick={click}
       onPointerDown={event => onDragStart(event, pin.id)}
-      aria-label={`${pin.title}${detail ? `, ${detail}` : ''}${editMode ? ', kéo để di chuyển' : pin.room || pin.sensor || pin.fan || pin.id === 'bedroom-climate' ? ', nhấn để điều khiển' : ''}`}
-      aria-pressed={pin.room || pin.sensor || pin.fan || pin.id === 'bedroom-climate' ? active : undefined}
+      aria-label={`${pin.title}${detail ? `, ${detail}` : ''}${editMode ? ', kéo để di chuyển' : pin.room || pin.sensor || pin.fan || pin.id === 'bedroom-ac' ? ', nhấn để điều khiển' : ''}`}
+      aria-pressed={pin.room || pin.sensor || pin.fan || pin.id === 'bedroom-ac' ? active : undefined}
       title={editMode ? `${pin.title} · x: ${pin.x}, y: ${pin.y}` : pin.title}
     >
       <span className="pin-icon">{icon}</span>
