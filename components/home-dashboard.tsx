@@ -53,6 +53,44 @@ type HAState = { entity_id: string; state: string; attributes?: Record<string, u
 
 const HA_API_PATH = '/api/ha'
 
+// ============================================================
+// CẤU HÌNH THỜI GIAN — CHẾ ĐỘ DEMO (rút ngắn còn 1–3 giây)
+// Đổi lại giá trị trong ngoặc comment để hoàn nguyên vận hành thực tế.
+// ============================================================
+const TIMING = {
+  // Rule 2: CO2 > ngưỡng, chờ escalate bật thêm hút mùi PA
+  // Gốc: 60 giây
+  co2Escalation: 2, // giây
+
+  // Rule 2: CO2 đạt chuẩn, chờ tắt quạt
+  // Gốc: 180 giây (3 phút)
+  co2OffDelay: 2, // giây
+
+  // Rule 3: Làm mát tự nhiên, chạy quạt gió tươi PA
+  // Gốc: 900 giây (15 phút)
+  naturalCoolingDuration: 2, // giây
+
+  // Rule 4: Phòng trống, chờ tắt đèn
+  // Gốc: 30 giây
+  autoOffDelay: 2, // giây
+
+  // Rule 5 - Giai đoạn 1: Hút mùi PN khởi động khi bật AC
+  // Gốc: 300 giây (5 phút)
+  acVentPhase1: 2, // giây
+
+  // Rule 5 - Giai đoạn 2: Gió tươi PN trong chu kỳ
+  // Gốc: 300 giây (5 phút)
+  acVentCycleFresh: 2, // giây
+
+  // Rule 5 - Giai đoạn 2: Hút mùi PN trong chu kỳ
+  // Gốc: 900 giây (15 phút)
+  acVentCycleExhaust: 3, // giây
+
+  // Rule 5: Chu kỳ định kỳ khi AC hoạt động liên tục
+  // Gốc: 7200 giây (2 giờ)
+  acHourlyCycle: 3, // giây
+}
+
 const ENTITY_MAP = {
   lights: {
     kho: 'light.kho',
@@ -409,7 +447,7 @@ export function HomeDashboard() {
   const [naturalCoolingRemaining, setNaturalCoolingRemaining] = useState<number | null>(null)
   const naturalCoolingActiveRef = useRef(false)
 
-  // Rule 4: auto-off countdown per sensor (30s)
+  // Rule 4: auto-off countdown per sensor
   const autoOffTimersRef = useRef<Record<string, ReturnType<typeof setTimeout> | null>>({})
   const autoOffTicksRef = useRef<Record<string, ReturnType<typeof setInterval> | null>>({})
   const [autoOffRemaining, setAutoOffRemaining] = useState<Record<string, number | null>>({})
@@ -428,12 +466,19 @@ export function HomeDashboard() {
   const [acVentExhaustRemaining, setAcVentExhaustRemaining] = useState<number | null>(null)
 
   const acHourlyIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const acHourlyTickRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [acHoursRemaining, setAcHoursRemaining] = useState<number | null>(null)
 
   // Theo dõi presence trước đó để phát hiện chuyển false → true (kích hoạt automation)
   const prevPresenceRef = useRef<Record<SensorKey, boolean>>({ ...initialPresence })
   // Theo dõi lux trước đó để phát hiện chuyển sáng → tối (kích hoạt nhóm 2)
   const prevLuxRef = useRef<number>(126)
+
+  // Ref mirrors cho auto-off timers để tránh stale closure khi check lại presence/lights
+  const presenceRef = useRef(presence)
+  const lightsRef = useRef(lights)
+  useEffect(() => { presenceRef.current = presence }, [presence])
+  useEffect(() => { lightsRef.current = lights }, [lights])
 
   const addEvent = (message: string, type: 'auto' | 'manual' | 'sensor' | 'system' = 'manual') => setEvents(current => [{ time: timeLabel(), message, type }, ...current].slice(0, 12))
 
@@ -853,6 +898,7 @@ export function HomeDashboard() {
       if (acVentCycleExhaustTimerRef.current) clearTimeout(acVentCycleExhaustTimerRef.current)
       if (acVentCycleExhaustTickRef.current) clearInterval(acVentCycleExhaustTickRef.current)
       if (acHourlyIntervalRef.current) clearInterval(acHourlyIntervalRef.current)
+      if (acHourlyTickRef.current) clearInterval(acHourlyTickRef.current)
       Object.values(autoOffTimersRef.current).forEach(t => { if (t) clearTimeout(t) })
       Object.values(autoOffTicksRef.current).forEach(t => { if (t) clearInterval(t) })
     }
@@ -888,6 +934,7 @@ export function HomeDashboard() {
     if (acVentCycleExhaustTickRef.current) { clearInterval(acVentCycleExhaustTickRef.current); acVentCycleExhaustTickRef.current = null }
     setAcVentExhaustRemaining(null)
     if (acHourlyIntervalRef.current) { clearInterval(acHourlyIntervalRef.current); acHourlyIntervalRef.current = null }
+    if (acHourlyTickRef.current) { clearInterval(acHourlyTickRef.current); acHourlyTickRef.current = null }
     setAcHoursRemaining(null)
   }, [automation])
 
@@ -981,16 +1028,16 @@ export function HomeDashboard() {
         const tick = setInterval(() => {
           setCo2EscalationRemaining(prev => (prev !== null && prev > 1 ? prev - 1 : 0))
         }, 1000)
-        setCo2EscalationRemaining(60)
+        setCo2EscalationRemaining(TIMING.co2Escalation)
         co2EscalationTimerRef.current = setTimeout(() => {
           clearInterval(tick)
           setCo2EscalationRemaining(null)
           if (!fans.exhaustPA) {
             setFans(previous => ({ ...previous, exhaustPA: true }))
-            addEvent('CO2 phòng ăn không giảm sau 1 phút → Bật thêm quạt hút mùi phòng ăn', 'auto')
+            addEvent('CO2 phòng ăn không giảm sau thời gian chờ → Bật thêm quạt hút mùi phòng ăn', 'auto')
             pushFanToHA('exhaustPA', true)
           }
-        }, 60000)
+        }, TIMING.co2Escalation * 1000)
         if (co2OffTickRef.current) clearInterval(co2OffTickRef.current)
         co2OffTickRef.current = tick
       }
@@ -1001,7 +1048,7 @@ export function HomeDashboard() {
       co2EscalationStartedRef.current = false
       if ((fans.freshAirPA || fans.exhaustPA) && !co2OffPendingRef.current) {
         co2OffPendingRef.current = true
-        setCo2OffRemaining(180)
+        setCo2OffRemaining(TIMING.co2OffDelay)
         const tick = setInterval(() => {
           setCo2OffRemaining(prev => (prev !== null && prev > 1 ? prev - 1 : 0))
         }, 1000)
@@ -1010,10 +1057,10 @@ export function HomeDashboard() {
           setCo2OffRemaining(null)
           co2OffPendingRef.current = false
           setFans(previous => ({ ...previous, freshAirPA: false, exhaustPA: false }))
-          addEvent('CO2 phòng ăn đạt chuẩn 3 phút → Tắt quạt gió tươi PA và quạt hút mùi PA', 'auto')
+          addEvent('CO2 phòng ăn đạt chuẩn sau thời gian chờ → Tắt quạt gió tươi PA và quạt hút mùi PA', 'auto')
           pushFanToHA('freshAirPA', false)
           pushFanToHA('exhaustPA', false)
-        }, 180000)
+        }, TIMING.co2OffDelay * 1000)
         if (co2OffTickRef.current) clearInterval(co2OffTickRef.current)
         co2OffTickRef.current = tick
       }
@@ -1033,8 +1080,8 @@ export function HomeDashboard() {
         setFans(previous => ({ ...previous, freshAirPA: true }))
         pushFanToHA('freshAirPA', true)
       }
-      addEvent('Nhiệt độ ngoài trời < 28°C, trong phòng > 30°C và có người → Bật quạt gió tươi PA 15 phút', 'auto')
-      setNaturalCoolingRemaining(900)
+      addEvent('Nhiệt độ ngoài trời < 28°C, trong phòng > 30°C và có người → Bật quạt gió tươi PA (demo)', 'auto')
+      setNaturalCoolingRemaining(TIMING.naturalCoolingDuration)
       const tick = setInterval(() => {
         setNaturalCoolingRemaining(prev => {
           if (prev === null || prev <= 1) { clearInterval(tick); return 0 }
@@ -1049,10 +1096,10 @@ export function HomeDashboard() {
         naturalCoolingActiveRef.current = false
         if (co2Dining <= co2Threshold) {
           setFans(previous => ({ ...previous, freshAirPA: false }))
-          addEvent('Hết 15 phút làm mát tự nhiên → Tắt quạt gió tươi PA', 'auto')
+          addEvent('Hết thời gian làm mát tự nhiên → Tắt quạt gió tươi PA', 'auto')
           pushFanToHA('freshAirPA', false)
         }
-      }, 900000)
+      }, TIMING.naturalCoolingDuration * 1000)
     } else if (!shouldActivate && naturalCoolingActiveRef.current) {
       if (naturalCoolingTimerRef.current) { clearTimeout(naturalCoolingTimerRef.current); naturalCoolingTimerRef.current = null }
       if (naturalCoolingTickRef.current) { clearInterval(naturalCoolingTickRef.current); naturalCoolingTickRef.current = null }
@@ -1066,7 +1113,7 @@ export function HomeDashboard() {
     }
   }, [outdoorTemp, grandparentsTemp, diningTemp, presence, automation, co2Dining, co2Threshold, fans.freshAirPA, pushFanToHA])
 
-  // ===== LUẬT 4: Tự động tắt đèn sau 30 giây khi phòng trống =====
+  // ===== LUẬT 4: Tự động tắt đèn sau khi phòng trống (demo: 2 giây) =====
   useEffect(() => {
     if (!automation) {
       prevPresenceRef.current = { ...presence }
@@ -1097,13 +1144,13 @@ export function HomeDashboard() {
         addEvent(`Có người trở lại ${label} → Hủy hẹn tắt đèn`, 'auto')
       }
 
-      // Có người → Không có người: bắt đầu đếm 30s nếu có ít nhất 1 đèn đang bật
+      // Có người → Không có người: bắt đầu đếm ngược nếu có ít nhất 1 đèn đang bật
       if (!isPresent && wasPresent) {
         const anyLightOn = rooms.some(r => lights[r])
         if (anyLightOn) {
           if (autoOffTimersRef.current[sensor]) clearTimeout(autoOffTimersRef.current[sensor])
           if (autoOffTicksRef.current[sensor]) clearInterval(autoOffTicksRef.current[sensor])
-          setAutoOffRemaining(prev => ({ ...prev, [sensor]: 30 }))
+          setAutoOffRemaining(prev => ({ ...prev, [sensor]: TIMING.autoOffDelay }))
           const tick = setInterval(() => {
             setAutoOffRemaining(prev => {
               const val = prev[sensor]
@@ -1133,11 +1180,11 @@ export function HomeDashboard() {
                 return next
               })
               lightsToTurnOff.forEach(r => {
-                addEvent(`Phòng ${label} trống sau 30s → Tự động tắt ${ROOM_TITLE[r]}`, 'auto')
+                addEvent(`Phòng ${label} trống sau ${TIMING.autoOffDelay}s → Tự động tắt ${ROOM_TITLE[r]}`, 'auto')
                 pushLightToHA(r, false)
               })
             }
-          }, 30000)
+          }, TIMING.autoOffDelay * 1000)
           autoOffTimersRef.current[sensor] = timer
         }
       }
@@ -1145,12 +1192,6 @@ export function HomeDashboard() {
 
     prevPresenceRef.current = { ...presence }
   }, [presence, automation, lights, pushLightToHA])
-
-  // Ref mirrors cho auto-off timers để tránh stale closure khi check lại presence/lights
-  const presenceRef = useRef(presence)
-  const lightsRef = useRef(lights)
-  useEffect(() => { presenceRef.current = presence }, [presence])
-  useEffect(() => { lightsRef.current = lights }, [lights])
 
   // ===== LUẬT 5: Chu kỳ thông gió & hút mùi tự động khi bật Điều hòa =====
   const clearAcVentPhase1 = useCallback(() => {
@@ -1170,15 +1211,16 @@ export function HomeDashboard() {
 
   const clearAcHourly = useCallback(() => {
     if (acHourlyIntervalRef.current) { clearInterval(acHourlyIntervalRef.current); acHourlyIntervalRef.current = null }
+    if (acHourlyTickRef.current) { clearInterval(acHourlyTickRef.current); acHourlyTickRef.current = null }
     setAcHoursRemaining(null)
   }, [])
 
   const runAcVentCycle = useCallback((reason: string) => {
-    // Giai đoạn 2: bật Gió tươi PN 5 phút + Hút mùi PN 15 phút
+    // Giai đoạn 2: bật Gió tươi PN + Hút mùi PN (demo: 2s / 3s)
     addEvent(reason, 'auto')
     setFans(prev => ({ ...prev, freshAirPN: true }))
     pushFanToHA('freshAirPN', true)
-    setAcVentFreshRemaining(300)
+    setAcVentFreshRemaining(TIMING.acVentCycleFresh)
     const freshTick = setInterval(() => {
       setAcVentFreshRemaining(prev => {
         if (prev === null || prev <= 1) { clearInterval(freshTick); return 0 }
@@ -1194,13 +1236,13 @@ export function HomeDashboard() {
       acVentCycleFreshTimerRef.current = null
       setAcVentFreshRemaining(null)
       setFans(prev => ({ ...prev, freshAirPN: false }))
-      addEvent('Gió tươi PN: hết 5 phút → Tắt', 'auto')
+      addEvent('Gió tươi PN: hết thời gian chu kỳ → Tắt', 'auto')
       pushFanToHA('freshAirPN', false)
-    }, 300000)
+    }, TIMING.acVentCycleFresh * 1000)
 
     setFans(prev => ({ ...prev, exhaustPN: true }))
     pushFanToHA('exhaustPN', true)
-    setAcVentExhaustRemaining(900)
+    setAcVentExhaustRemaining(TIMING.acVentCycleExhaust)
     const exhaustTick = setInterval(() => {
       setAcVentExhaustRemaining(prev => {
         if (prev === null || prev <= 1) { clearInterval(exhaustTick); return 0 }
@@ -1216,9 +1258,9 @@ export function HomeDashboard() {
       acVentCycleExhaustTimerRef.current = null
       setAcVentExhaustRemaining(null)
       setFans(prev => ({ ...prev, exhaustPN: false }))
-      addEvent('Hút mùi PN: hết 15 phút → Tắt', 'auto')
+      addEvent('Hút mùi PN: hết thời gian chu kỳ → Tắt', 'auto')
       pushFanToHA('exhaustPN', false)
-    }, 900000)
+    }, TIMING.acVentCycleExhaust * 1000)
   }, [addEvent, pushFanToHA])
 
   // Khi AC bật/tắt
@@ -1230,12 +1272,12 @@ export function HomeDashboard() {
       return
     }
     if (acOn) {
-      // Giai đoạn 1: Hút mùi PN 5 phút
+      // Giai đoạn 1: Hút mùi PN (demo: 2 giây)
       clearAcVentPhase1()
       setFans(prev => ({ ...prev, exhaustPN: true }))
       pushFanToHA('exhaustPN', true)
-      addEvent('Điều hòa bật → Bật Hút mùi PN trong 5 phút', 'auto')
-      setAcVentPhase1Remaining(300)
+      addEvent('Điều hòa bật → Bật Hút mùi PN (demo)', 'auto')
+      setAcVentPhase1Remaining(TIMING.acVentPhase1)
       const tick = setInterval(() => {
         setAcVentPhase1Remaining(prev => {
           if (prev === null || prev <= 1) { clearInterval(tick); return 0 }
@@ -1251,28 +1293,27 @@ export function HomeDashboard() {
         // Chỉ tắt nếu không có chu kỳ 2h nào đang bật exhaustPN
         if (acVentCycleExhaustTimerRef.current === null) {
           setFans(prev => ({ ...prev, exhaustPN: false }))
-          addEvent('Hút mùi PN: hết 5 phút khởi động → Tắt', 'auto')
+          addEvent('Hút mùi PN: hết giai đoạn khởi động → Tắt', 'auto')
           pushFanToHA('exhaustPN', false)
         }
-      }, 300000)
+      }, TIMING.acVentPhase1 * 1000)
 
-      // Lên lịch chu kỳ 2 giờ
+      // Lên lịch chu kỳ định kỳ (demo: 3 giây)
       clearAcHourly()
-      setAcHoursRemaining(7200)
+      setAcHoursRemaining(TIMING.acHourlyCycle)
       const hourlyTick = setInterval(() => {
         setAcHoursRemaining(prev => {
           if (prev === null || prev <= 1) return 0
           return prev - 1
         })
       }, 1000)
+      acHourlyTickRef.current = hourlyTick
       const hourly = setInterval(() => {
-        // Mỗi 2 giờ kích hoạt chu kỳ
-        runAcVentCycle('Điều hòa hoạt động đủ 2 giờ → Bật Gió tươi PN (5p) & Hút mùi PN (15p)')
-      }, 7200000)
+        // Mỗi chu kỳ kích hoạt
+        runAcVentCycle('Điều hòa hoạt động đủ chu kỳ → Bật Gió tươi PN & Hút mùi PN (demo)')
+        setAcHoursRemaining(TIMING.acHourlyCycle)
+      }, TIMING.acHourlyCycle * 1000)
       acHourlyIntervalRef.current = hourly
-      // Lưu tick hourly để cleanup
-      // (tick sẽ được clear khi AC tắt / automation tắt / unmount)
-      ;(acHourlyIntervalRef as unknown as { tick?: ReturnType<typeof setInterval> }).tick = hourlyTick
     } else {
       clearAcVentPhase1()
       clearAcVentCycle()
@@ -1285,14 +1326,6 @@ export function HomeDashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [acOn, automation])
-
-  // Đảm bảo tick của acHourly được clear khi clearAcHourly
-  useEffect(() => {
-    return () => {
-      const t = (acHourlyIntervalRef as unknown as { tick?: ReturnType<typeof setInterval> }).tick
-      if (t) clearInterval(t)
-    }
-  }, [])
 
   const handleAcToggle = useCallback((next: boolean) => {
     setAcOn(next)
@@ -1487,13 +1520,13 @@ export function HomeDashboard() {
               {co2EscalationRemaining !== null && <div style={{ fontSize: '12px', color: '#e67e22', marginTop: '4px' }}>⏳ CO2 chưa giảm: bật thêm quạt hút mùi PA sau {formatCountdown(co2EscalationRemaining)}</div>}
               {co2OffRemaining !== null && <div style={{ fontSize: '12px', color: '#27ae60', marginTop: '4px' }}>⏳ CO2 đạt chuẩn: tắt quạt sau {formatCountdown(co2OffRemaining)}</div>}
               {naturalCoolingRemaining !== null && <div style={{ fontSize: '12px', color: '#2980b9', marginTop: '4px' }}>🌬️ Làm mát tự nhiên: còn {formatCountdown(naturalCoolingRemaining)}</div>}
-              {acOn && acHoursRemaining !== null && <div style={{ fontSize: '12px', color: '#0284c7', marginTop: '4px' }}>❄️ Chu kỳ 2h: còn {formatCountdown(acHoursRemaining)}</div>}
+              {acOn && acHoursRemaining !== null && <div style={{ fontSize: '12px', color: '#0284c7', marginTop: '4px' }}>❄️ Chu kỳ định kỳ: còn {formatCountdown(acHoursRemaining)}</div>}
               {acVentPhase1Remaining !== null && <div style={{ fontSize: '12px', color: '#e67e22', marginTop: '4px' }}>🌪️ Hút mùi PN khởi động: còn {formatCountdown(acVentPhase1Remaining)}</div>}
-              {acVentFreshRemaining !== null && <div style={{ fontSize: '12px', color: '#2980b9', marginTop: '4px' }}>🌬️ Gió tươi PN (5p): còn {formatCountdown(acVentFreshRemaining)}</div>}
-              {acVentExhaustRemaining !== null && <div style={{ fontSize: '12px', color: '#2980b9', marginTop: '4px' }}>🌬️ Hút mùi PN (15p): còn {formatCountdown(acVentExhaustRemaining)}</div>}
-              <button className="outline-button" style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }} onClick={() => runAcVentCycle('Test chu kỳ 2h: Bật Gió tươi PN (5p) & Hút mùi PN (15p)')}>Test chu kỳ 2h (demo)</button>
+              {acVentFreshRemaining !== null && <div style={{ fontSize: '12px', color: '#2980b9', marginTop: '4px' }}>🌬️ Gió tươi PN chu kỳ: còn {formatCountdown(acVentFreshRemaining)}</div>}
+              {acVentExhaustRemaining !== null && <div style={{ fontSize: '12px', color: '#2980b9', marginTop: '4px' }}>🌬️ Hút mùi PN chu kỳ: còn {formatCountdown(acVentExhaustRemaining)}</div>}
+              <button className="outline-button" style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }} onClick={() => runAcVentCycle('Test chu kỳ: Bật Gió tươi PN & Hút mùi PN (demo)')}>Test chu kỳ 2h (demo)</button>
             </section>
-            <section className="automation-card"><div className="automation-heading"><div className="automation-icon"><Zap size={16} /></div><div><strong>Tự động hóa thông minh</strong><span>{automation ? 'Đang hoạt động' : 'Đã tạm dừng'}</span></div><button className={`mini-switch ${automation ? 'on' : ''}`} aria-label={`${automation ? 'Tắt' : 'Bật'} tự động hóa`} aria-pressed={automation} onClick={toggleAutomation}><span /></button></div><p>Nhóm 1: Kho/Bếp/PA/WC/PK/PN/SB bật đèn ngay khi có người. Nhóm 2: Đèn cửa buồng bật khi Hiên/PN có người &amp; trời tối (lux ≤ 300). Nhóm 3: Đèn SV/cổng/hiên chỉ bật thủ công. MQ2 &gt; ngưỡng: bật hút mùi PN. CO2 &gt; ngưỡng: bật gió tươi PA, sau 1 phút bật thêm hút mùi PA; đạt chuẩn 3 phút tắt cả hai. Trời mát &lt;28°C, phòng &gt;30°C, có người: bật gió tươi PA 15 phút. Luật 4: phòng trống 30s → tắt đèn. Luật 5: AC PN bật → hút mùi PN 5p; mỗi 2h → gió tươi PN 5p + hút mùi PN 15p.</p></section>
+            <section className="automation-card"><div className="automation-heading"><div className="automation-icon"><Zap size={16} /></div><div><strong>Tự động hóa thông minh</strong><span>{automation ? 'Đang hoạt động' : 'Đã tạm dừng'}</span></div><button className={`mini-switch ${automation ? 'on' : ''}`} aria-label={`${automation ? 'Tắt' : 'Bật'} tự động hóa`} aria-pressed={automation} onClick={toggleAutomation}><span /></button></div><p>Nhóm 1: Kho/Bếp/PA/WC/PK/PN/SB bật đèn ngay khi có người. Nhóm 2: Đèn cửa buồng bật khi Hiên/PN có người &amp; trời tối (lux ≤ 300). Nhóm 3: Đèn SV/cổng/hiên chỉ bật thủ công. MQ2 &gt; ngưỡng: bật hút mùi PN. CO2 &gt; ngưỡng: bật gió tươi PA, sau thời gian chờ bật thêm hút mùi PA; đạt chuẩn sau thời gian chờ tắt cả hai. Trời mát &lt;28°C, phòng &gt;30°C, có người: bật gió tươi PA (demo). Luật 4: phòng trống → tắt đèn sau thời gian chờ. Luật 5: AC PN bật → hút mùi PN giai đoạn khởi động; chu kỳ định kỳ → gió tươi PN + hút mùi PN. (Tất cả thời gian đang ở chế độ demo 1–3 giây.)</p></section>
             <section className="panel-section devices-section"><div className="section-heading"><div><span className="section-icon device-section"><Zap size={15} /></span><h3>Thiết bị nhanh</h3></div><button className="text-action" onClick={() => addEvent('Đã mở danh sách thiết bị')}>Tất cả <ChevronRight size={12} /></button></div><div className="quick-devices">
               {(['freshAirPA', 'exhaustPA', 'freshAirPN', 'exhaustPN'] as FanKey[]).map(key => (
                 <button key={key} className={`device-tile ${fans[key] ? 'active' : ''}`} onClick={() => toggleFan(key)}><span className="tile-icon"><Fan size={17} className={fans[key] ? 'fan-spin' : ''} /></span><span><strong>{FAN_SHORT[key]}</strong><small>{fans[key] ? 'Đang bật' : 'Tắt'}</small></span><ChevronDown size={13} /></button>
@@ -1604,10 +1637,10 @@ function PinButton({
     countdownText = `Khởi động ${formatCountdown(acVentPhase1Remaining)}`
   }
   if (pin.fan === 'freshAirPN' && acVentFreshRemaining !== null) {
-    countdownText = `Chu kỳ 5p ${formatCountdown(acVentFreshRemaining)}`
+    countdownText = `Chu kỳ ${formatCountdown(acVentFreshRemaining)}`
   }
   if (pin.fan === 'exhaustPN' && acVentExhaustRemaining !== null) {
-    countdownText = `Chu kỳ 15p ${formatCountdown(acVentExhaustRemaining)}`
+    countdownText = `Chu kỳ ${formatCountdown(acVentExhaustRemaining)}`
   }
 
   const acHighlight = pin.id === 'bedroom-ac' && acOn
