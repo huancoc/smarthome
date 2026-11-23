@@ -157,6 +157,7 @@ const ENTITY_MAP = {
 }
 
 const floorImage = '/floor-plan/bg.jpg'
+const floorImageDay = '/floor-plan/bg-day.jpg'
 
 // All light layers including wc.png
 const lightLayers: Array<{ room: RoomKey; src: string }> = [
@@ -288,7 +289,7 @@ const initialPins: Pin[] = [
 
 const initialLights: Record<RoomKey, boolean> = {
   kho: false,
-  bep: true,
+  bep: false,
   veSinh: false,
   phongAn: false,
   khach: false,
@@ -314,7 +315,7 @@ const initialFans: Record<FanKey, boolean> = {
 const initialPresence: Record<SensorKey, boolean> = {
   kho: false,
   sanVuon: false,
-  phongOngBa: true,
+  phongOngBa: false,
   nhaVeSinh: false,
   bep: false,
   phongAn: false,
@@ -470,7 +471,10 @@ export function HomeDashboard() {
   const [acHoursRemaining, setAcHoursRemaining] = useState<number | null>(null)
 
   // Theo dõi presence trước đó để phát hiện chuyển false → true (kích hoạt automation)
-  const prevPresenceRef = useRef<Record<SensorKey, boolean>>({ ...initialPresence })
+  // Mỗi logic dùng một ref riêng để tránh xung đột ghi đè lẫn nhau.
+  const prevGroup1PresenceRef = useRef<Record<SensorKey, boolean>>({ ...initialPresence })
+  const prevGroup2PresenceRef = useRef<Record<SensorKey, boolean>>({ ...initialPresence })
+  const prevAutoOffPresenceRef = useRef<Record<SensorKey, boolean>>({ ...initialPresence })
   // Theo dõi lux trước đó để phát hiện chuyển sáng → tối (kích hoạt nhóm 2)
   const prevLuxRef = useRef<number>(126)
 
@@ -941,10 +945,10 @@ export function HomeDashboard() {
   // ===== NHÓM 1: Đèn trong nhà - bật ngay khi có người (không phụ thuộc lux) =====
   useEffect(() => {
     if (!automation) {
-      prevPresenceRef.current = { ...presence }
+      prevGroup1PresenceRef.current = { ...presence }
       return
     }
-    const prev = prevPresenceRef.current
+    const prev = prevGroup1PresenceRef.current
     AUTO_GROUP_1.forEach(({ sensor, room, label }) => {
       const wasPresent = prev[sensor]
       const isPresent = presence[sensor]
@@ -957,17 +961,17 @@ export function HomeDashboard() {
         }
       }
     })
-    prevPresenceRef.current = { ...presence }
+    prevGroup1PresenceRef.current = { ...presence }
   }, [presence, automation, lights, pushLightToHA])
 
   // ===== NHÓM 2: Đèn cửa buồng - chỉ bật khi có người (Hiên hoặc PN) VÀ trời tối (lux <= 300) =====
   useEffect(() => {
     if (!automation) {
-      prevPresenceRef.current = { ...presence }
+      prevGroup2PresenceRef.current = { ...presence }
       prevLuxRef.current = lux
       return
     }
-    const prev = prevPresenceRef.current
+    const prev = prevGroup2PresenceRef.current
     const prevLux = prevLuxRef.current
     const hasPresenceTrigger = (presence.hienNha && !prev.hienNha) || (presence.phongNgu && !prev.phongNgu)
     const luxBecameDark = lux <= 300 && prevLux > 300
@@ -983,7 +987,7 @@ export function HomeDashboard() {
         pushLightToHA('cuaBuong', true)
       }
     }
-    prevPresenceRef.current = { ...presence }
+    prevGroup2PresenceRef.current = { ...presence }
     prevLuxRef.current = lux
   }, [presence, lux, automation, lights.cuaBuong, pushLightToHA])
 
@@ -1116,7 +1120,7 @@ export function HomeDashboard() {
   // ===== LUẬT 4: Tự động tắt đèn sau khi phòng trống (demo: 2 giây) =====
   useEffect(() => {
     if (!automation) {
-      prevPresenceRef.current = { ...presence }
+      prevAutoOffPresenceRef.current = { ...presence }
       Object.values(autoOffTimersRef.current).forEach(t => { if (t) clearTimeout(t) })
       Object.values(autoOffTicksRef.current).forEach(t => { if (t) clearInterval(t) })
       autoOffTimersRef.current = {}
@@ -1126,7 +1130,7 @@ export function HomeDashboard() {
     }
 
     AUTO_OFF_MAP.forEach(({ sensor, rooms, label }) => {
-      const wasPresent = prevPresenceRef.current[sensor]
+      const wasPresent = prevAutoOffPresenceRef.current[sensor]
       const isPresent = presence[sensor]
 
       // Có người trở lại -> hủy đếm ngược
@@ -1146,7 +1150,7 @@ export function HomeDashboard() {
 
       // Có người → Không có người: bắt đầu đếm ngược nếu có ít nhất 1 đèn đang bật
       if (!isPresent && wasPresent) {
-        const anyLightOn = rooms.some(r => lights[r])
+        const anyLightOn = rooms.some(r => lightsRef.current[r])
         if (anyLightOn) {
           if (autoOffTimersRef.current[sensor]) clearTimeout(autoOffTimersRef.current[sensor])
           if (autoOffTicksRef.current[sensor]) clearInterval(autoOffTicksRef.current[sensor])
@@ -1190,8 +1194,8 @@ export function HomeDashboard() {
       }
     })
 
-    prevPresenceRef.current = { ...presence }
-  }, [presence, automation, lights, pushLightToHA])
+    prevAutoOffPresenceRef.current = { ...presence }
+  }, [presence, automation, pushLightToHA])
 
   // ===== LUẬT 5: Chu kỳ thông gió & hút mùi tự động khi bật Điều hòa =====
   const clearAcVentPhase1 = useCallback(() => {
@@ -1396,26 +1400,8 @@ export function HomeDashboard() {
           <section className="floor-card" aria-label="Sơ đồ mặt bằng tương tác">
             <div className="floor-header"><div><div className="floor-title"><h2>Sơ đồ mặt bằng</h2><span className="live-pill"><span /> TRỰC TIẾP</span></div><p>Chọn thiết bị trên bản đồ để điều khiển</p></div><div className="floor-tools"><span className="floor-location"><Home size={13} /> Tầng trệt</span>{editMode && <button className="outline-button" style={{ padding: '4px 10px', fontSize: '11px' }} onClick={copyPinsCode}>{copied ? 'Đã copy!' : 'Copy tọa độ'}</button>}<button className={`outline-button ${editMode ? 'is-active' : ''}`} style={{ padding: '4px 10px', fontSize: '11px' }} onClick={() => { const next = !editMode; setEditMode(next); addEvent(next ? 'Đã bật chế độ chỉnh tọa độ pins' : 'Đã tắt chế độ chỉnh tọa độ pins', 'manual') }}>{editMode ? 'Xong' : 'Chỉnh tọa độ'}</button><button className="dots-button" aria-label="Thêm tùy chọn"><MoreHorizontal size={19} /></button></div></div>
             <div className={`floor-canvas ${editMode ? 'is-editing' : ''}`} ref={floorCanvasRef}>
-              <img className="floor-image" src={floorImage} alt="Sơ đồ 3D nhìn từ trên xuống của ngôi nhà, gồm phòng khách, nhà bếp, phòng ngủ và sân vườn" />
+              <img className="floor-image" src={isDay ? floorImageDay : floorImage} alt="Sơ đồ 3D nhìn từ trên xuống của ngôi nhà, gồm phòng khách, nhà bếp, phòng ngủ và sân vườn" />
               <div className="floor-vignette" />
-              {isDay && (
-                <img
-                  src="/floor-plan/day-on.png"
-                  alt=""
-                  aria-hidden="true"
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    pointerEvents: 'none',
-                    mixBlendMode: 'lighten',
-                    transition: 'opacity 0.3s ease',
-                    opacity: 1,
-                  }}
-                />
-              )}
               {lightLayers.map(layer => (
                 <img
                   key={layer.room}
