@@ -92,84 +92,97 @@ const TIMING = {
 }
 
 // ============================================================
-// CẤU HÌNH ENTITY — dễ chỉnh sửa khi HA đổi entity_id
+// CẤU HÌNH ENTITY THẬT TỪ HOME ASSISTANT
 // ============================================================
 const ENTITY_OVERRIDES = {
-  // CO2 phòng ăn — đổi thành entity thực tế của bạn
-  co2Dining: 'sensor.co2_phong_an',
   // Ngưỡng quy đổi đơn vị khoảng cách LD2410 (cm → m nếu > 20)
   distanceCmThreshold: 20,
 }
 
 const ENTITY_MAP = {
   lights: {
-    kho: 'light.kho',
-    bep: 'light.bep',
-    phongAn: 'light.phong_an',
-    veSinh: 'light.ve_sinh',
-    khach: 'light.phong_khach',
-    hienTrai: 'light.hien_trai',
-    hienPhai: 'light.hien_phai',
-    sanBe: 'light.san_be',
-    cuaBuong: 'light.cua_buong',
-    denTranh: 'light.den_tranh',
-    warmDownlight: 'light.downlight_vang',
-    whiteDownlight: 'light.downlight_trang',
-    yeelightPN: 'light.yeelight_pn',
-    sanVuon: 'light.san_vuon',
-    denCong: 'light.den_cong',
+    kho: 'light.phong_kho_den_phong_kho',
+    bep: 'light.phong_bep_den_phong_bep',
+    phongAn: 'light.phong_an_den_phong_an',
+    veSinh: 'light.nha_ve_sinh_den_nha_ve_sinh',
+    khach: 'light.phong_khach_den_phong_khach',
+    hienTrai: 'light.loi_vao_den_loi_vao',
+    hienPhai: 'light.den_hien_be_den_hien_be',
+    sanBe: 'light.den_hien_be_den_hien_be',
+    cuaBuong: 'light.phong_ngu_den_cua_buong_phong_ngu',
+    denTranh: 'light.tu_led_den_led_tu',
+    warmDownlight: 'light.phong_ngu_den_tran_phong_ngu',
+    whiteDownlight: 'light.bang_dieu_khien_dau_giuong_o_cam_1_dau_giuong',
+    yeelightPN: 'light.yeelight_color4_0x179dcb99',
+    sanVuon: 'light.san_vuon_den_san_vuon',
+    denCong: 'light.san_vuon_den_cong_san_vuon',
   } as Record<RoomKey, string>,
   sensors: {
-    // 9-zone LD2410 presence (thêm kho)
-    khoPresence: 'binary_sensor.ld2410_kho',
-    khoDistance: 'sensor.ld2410_kho_distance',
-    sanVuonPresence: 'binary_sensor.ld2410_san_vuon',
-    sanVuonDistance: 'sensor.ld2410_san_vuon_distance',
-    phongOngBaPresence: 'binary_sensor.ld2410_phong_ong_ba',
-    phongOngBaDistance: 'sensor.ld2410_phong_ong_ba_distance',
-    nhaVeSinhPresence: 'binary_sensor.ld2410_wc',
-    nhaVeSinhDistance: 'sensor.ld2410_wc_distance',
-    bepPresence: 'binary_sensor.ld2410_bep',
-    bepDistance: 'sensor.ld2410_bep_distance',
-    phongAnPresence: 'binary_sensor.ld2410_phong_an',
-    phongAnDistance: 'sensor.ld2410_phong_an_distance',
-    sanBePresence: 'binary_sensor.ld2410_san_be',
-    sanBeDistance: 'sensor.ld2410_san_be_distance',
-    hienNhaPresence: 'binary_sensor.ld2410_hien_nha',
-    hienNhaDistance: 'sensor.ld2410_hien_nha_distance',
-    phongNguPresence: 'binary_sensor.ld2410_ngu',
-    phongNguDistance: 'sensor.ld2410_ngu_distance',
+    // 9-zone LD2410 presence
+    khoPresence: 'binary_sensor.phong_kho_co_nguoi_phong_kho',
+    khoDistance: 'sensor.phong_kho_khoang_cach_phat_hien_phong_kho',
+    sanVuonPresence: 'binary_sensor.hanh_lang_co_nguoi_hanh_lang',
+    sanVuonDistance: 'sensor.hanh_lang_khoang_cach_phat_hien_hanh_lang',
+    phongOngBaPresence: 'binary_sensor.phong_khach_co_nguoi_phong_khach',
+    phongOngBaDistance: 'sensor.phong_khach_khoang_cach_phat_hien_phong_khach',
+    nhaVeSinhPresence: 'binary_sensor.nha_ve_sinh_co_nguoi_nha_ve_sinh',
+    nhaVeSinhDistance: 'sensor.nha_ve_sinh_khoang_cach_phat_hien_nha_ve_sinh',
+    bepPresence: 'binary_sensor.phong_bep_co_nguoi_phong_bep',
+    bepDistance: 'sensor.phong_bep_khoang_cach_phat_hien_phong_bep',
+    phongAnPresence: 'binary_sensor.phong_an_bh1750_light_sensor_co_nguoi',
+    phongAnDistance: 'sensor.phong_an_bh1750_light_sensor_khoang_cach_phat_hien',
+    sanBePresence: 'binary_sensor.radar_hlk_ld2450_co_nguoi_radar',
+    sanBeDistance: 'sensor.hanh_lang_khoang_cach_phat_hien_hanh_lang',
+    hienNhaPresence: 'binary_sensor.loi_vao_co_nguoi_loi_vao',
+    hienNhaDistance: 'sensor.loi_vao_khoang_cach_phat_hien_loi_vao',
+    phongNguPresence: 'binary_sensor.phong_ngu_cam_bien_co_nguoi_phong_ngu',
+    phongNguDistance: 'sensor.phong_ngu_cam_bien_khoang_cach_phat_hien_phong_ngu',
     // Environment
-    lux: 'sensor.cam_bien_anh_sang',
-    // Outdoor (Sân vườn)
-    outdoorTemp: 'sensor.nhiet_do_san_vuon',
-    outdoorHum: 'sensor.do_am_san_vuon',
-    // Phòng ông bà / Phòng khách
-    grandparentsTemp: 'sensor.nhiet_do_phong_ong_ba',
-    grandparentsHum: 'sensor.do_am_phong_ong_ba',
+    lux: 'sensor.phong_an_phong_an_cam_bien_do_sang',
+    // Outdoor (Sân vườn / lối vào)
+    outdoorTemp: 'sensor.loi_vao_nhiet_do_ngoai_troi',
+    outdoorHum: 'sensor.loi_vao_do_am_ngoai_troi',
+    // Phòng khách / ông bà
+    grandparentsTemp: 'sensor.phong_khach_nhiet_do_phong_khach',
+    grandparentsHum: 'sensor.phong_khach_do_am_phong_khach',
     // Phòng ăn
-    diningTemp: 'sensor.nhiet_do_phong_an',
-    diningHum: 'sensor.do_am_phong_an',
+    diningTemp: 'sensor.phong_an_bh1750_light_sensor_nhiet_do',
+    diningHum: 'sensor.phong_an_bh1750_light_sensor_do_am',
+    // Phòng ngủ (từ Daikin AC)
+    bedroomTemp: 'sensor.daikin_ac_bedroom_temprate',
+    bedroomHum: 'sensor.daikin_ac_bedroom_humidity',
     // Safety & air
-    mq2Bedroom: 'sensor.cam_bien_khoi_mq2_phong_ngu',
-    co2Dining: ENTITY_OVERRIDES.co2Dining,
+    mq2Bedroom: 'sensor.phong_ngu_cam_bien_cam_bien_khoi_mp2_phong_ngu',
+    co2Dining: 'sensor.phong_an_bh1750_light_sensor_nong_do_co2',
   },
   climate: {
-    ac: 'climate.daikin',
-    fan: 'fan.quat_tran',
+    ac: 'climate.daikin_ac_daikin_air_condition',
+    fan: 'script.fan_power',
   },
   fans: {
-    freshAirPA: 'switch.quat_gio_tuoi_phong_an',
-    exhaustPA: 'switch.quat_hut_mui_phong_an',
-    freshAirPN: 'switch.quat_gio_tuoi_phong_ngu',
-    exhaustPN: 'switch.quat_hut_mui_phong_ngu',
+    freshAirPA: 'switch.quat_phong_an_quat_gio_tuoi_phong_an',
+    exhaustPA: 'switch.quat_phong_an_quat_hut_mui_phong_an',
+    freshAirPN: 'switch.phong_ngu_quat_gio_tuoi_phong_ngu',
+    exhaustPN: 'switch.phong_ngu_quat_hut_mui_phong_ngu',
   } as Record<FanKey, string>,
 }
 
-// Lấy domain từ entity_id (vd: 'switch.quat_gio_tuoi_phong_an' → 'switch')
+// Lấy domain từ entity_id (vd: 'switch.quat...' → 'switch', 'script.fan_power' → 'script')
 function domainOf(entityId: string): string {
   const idx = entityId.indexOf('.')
   return idx > 0 ? entityId.slice(0, idx) : 'homeassistant'
+}
+
+// Map action chuẩn HA cho từng domain
+function haActionFor(domain: string, next: boolean): { service: string; data?: Record<string, unknown> } {
+  if (domain === 'script') {
+    // Script: không có turn_off — luôn gọi turn_on (script tự xử lý toggle)
+    return { service: 'turn_on' }
+  }
+  if (domain === 'climate') {
+    return next ? { service: 'turn_on' } : { service: 'turn_off' }
+  }
+  return { service: next ? 'turn_on' : 'turn_off' }
 }
 
 const floorImage = '/floor-plan/bg.jpg'
@@ -270,7 +283,7 @@ const initialPins: Pin[] = [
   { id: 'garden', x: 85.2, y: 62.4, title: 'Đèn SV', kind: 'light', room: 'sanVuon' },
   { id: 'gate', x: 84.9, y: 86.1, title: 'Đèn cổng', kind: 'light', room: 'denCong' },
 
-  // Presence sensors - single pins (thêm Kho x:25, y:15)
+  // Presence sensors - single pins
   { id: 'kho-presence', x: 25, y: 15, title: 'Kho', kind: 'sensor', sensor: 'kho' },
   { id: 'pn-presence', x: 86.5, y: 30.5, title: 'PN', kind: 'sensor', sensor: 'phongNgu' },
   { id: 'pk-presence', x: 63.6, y: 27.8, title: 'PK', kind: 'sensor', sensor: 'phongOngBa' },
@@ -365,7 +378,6 @@ const AUTO_GROUP_1: Array<{ sensor: SensorKey; room: RoomKey; label: string }> =
 ]
 
 // Nhóm 3: Ngoài trời - KHÔNG tự động bật theo cảm biến hiện diện
-// (sanVuon, hienNha không map sang den sanVuon/hienTrai/hienPhai/denCong)
 const AUTO_GROUP_3_SENSORS: SensorKey[] = ['sanVuon', 'hienNha']
 
 // Rule 4 mapping: sensor -> room(s) to auto-turn-off after 30s empty
@@ -434,6 +446,9 @@ export function HomeDashboard() {
   const [grandparentsHum, setGrandparentsHum] = useState(72)
   const [diningTemp, setDiningTemp] = useState(26.4)
   const [diningHum, setDiningHum] = useState(68)
+  // Phòng ngủ (đọc riêng từ Daikin AC)
+  const [bedroomTemp, setBedroomTemp] = useState(27.1)
+  const [bedroomHum, setBedroomHum] = useState(64)
 
   const [mq2Bedroom, setMq2Bedroom] = useState(120)
   const [co2Dining, setCo2Dining] = useState(650)
@@ -505,7 +520,6 @@ export function HomeDashboard() {
   const [acHoursRemaining, setAcHoursRemaining] = useState<number | null>(null)
 
   // Theo dõi presence trước đó để phát hiện chuyển false → true (kích hoạt automation)
-  // Mỗi logic dùng một ref riêng để tránh xung đột ghi đè lẫn nhau.
   const prevGroup1PresenceRef = useRef<Record<SensorKey, boolean>>({ ...initialPresence })
   const prevGroup2PresenceRef = useRef<Record<SensorKey, boolean>>({ ...initialPresence })
   const prevAutoOffPresenceRef = useRef<Record<SensorKey, boolean>>({ ...initialPresence })
@@ -642,6 +656,12 @@ export function HomeDashboard() {
     const diningHumValue = readNumberSafe(ENTITY_MAP.sensors.diningHum)
     if (diningHumValue !== null) setDiningHum(Math.round(diningHumValue))
 
+    // Phòng ngủ - đọc riêng từ Daikin AC
+    const bedroomTempValue = readNumberSafe(ENTITY_MAP.sensors.bedroomTemp)
+    if (bedroomTempValue !== null) setBedroomTemp(Number(bedroomTempValue.toFixed(1)))
+    const bedroomHumValue = readNumberSafe(ENTITY_MAP.sensors.bedroomHum)
+    if (bedroomHumValue !== null) setBedroomHum(Math.round(bedroomHumValue))
+
     const mq2Value = readNumberSafe(ENTITY_MAP.sensors.mq2Bedroom)
     if (mq2Value !== null) setMq2Bedroom(Math.round(mq2Value))
 
@@ -666,8 +686,17 @@ export function HomeDashboard() {
       }
     }
 
-    const fanValue = readBoolSafe(ENTITY_MAP.climate.fan)
-    if (fanValue !== null) setFanOn(fanValue)
+    // Quạt trần: là script.fan_power — coi như bật khi script tồn tại và state không phải off/unavailable
+    const fanEntityId = ENTITY_MAP.climate.fan
+    if (!isEntityLocked(fanEntityId)) {
+      const fanState = byId.get(fanEntityId)
+      if (fanState) {
+        const raw = (fanState.state || '').toLowerCase()
+        // Script không có on/off thực sự — ta dùng state 'on' nếu đang chạy, ngược lại giữ nguyên
+        if (raw === 'on') setFanOn(true)
+        else if (raw === 'off') setFanOn(false)
+      }
+    }
   }, [isEntityLocked])
 
   const syncFromHA = useCallback(async (silent = false) => {
@@ -716,15 +745,20 @@ export function HomeDashboard() {
     }
   }, [mode, liveConnected, syncFromHA])
 
-  // Gửi lệnh tới HA, tự động chọn domain switch.* hoặc fan.*
+  // Gửi lệnh tới HA — chọn service theo domain (switch/light/fan/climate/script)
   const pushEntityToHA = useCallback((entityId: string, next: boolean, label: string) => {
     if (mode !== 'live' || !liveConnected) return
     lockEntity(entityId, 2500)
     const domain = domainOf(entityId)
-    const action = next ? 'turn_on' : 'turn_off'
+    const { service, data } = haActionFor(domain, next)
     callHA({
       method: 'POST',
-      body: JSON.stringify({ entity_id: entityId, domain, action }),
+      body: JSON.stringify({
+        entity_id: entityId,
+        domain,
+        action: service,
+        ...(data ? { data } : {}),
+      }),
     })
       .then(async response => {
         if (!response.ok) {
@@ -799,6 +833,8 @@ export function HomeDashboard() {
 
   // Khi live: khoá mọi thanh trượt giả lập — chỉ đọc dữ liệu thực
   const slidersLocked = mode === 'live' && liveConnected
+  // Khi live: TẮT toàn bộ automation chạy ngầm trên trình duyệt để tránh xung đột HA
+  const automationRunning = automation && !slidersLocked
 
   const updatePinPosition = useCallback((id: string, clientX: number, clientY: number) => {
     const canvas = floorCanvasRef.current
@@ -923,7 +959,7 @@ export function HomeDashboard() {
     setAuthError('')
     if (liveConnected && adminPassword) {
       setMode('live')
-      addEvent('Đã chuyển sang chế độ Kết nối thực tế', 'system')
+      addEvent('Đã chuyển sang chế độ Kết nối thực tế — automation trình duyệt tạm dừng', 'system')
       return
     }
     setMode('live')
@@ -972,8 +1008,9 @@ export function HomeDashboard() {
     }
   }, [])
 
+  // Khi tắt automation HOẶC đang ở live (HA tự lo) → clear toàn bộ timer
   useEffect(() => {
-    if (automation) return
+    if (automationRunning) return
     if (co2EscalationTimerRef.current) { clearTimeout(co2EscalationTimerRef.current); co2EscalationTimerRef.current = null }
     if (co2OffTimerRef.current) { clearTimeout(co2OffTimerRef.current); co2OffTimerRef.current = null }
     if (co2OffTickRef.current) { clearInterval(co2OffTickRef.current); co2OffTickRef.current = null }
@@ -1004,11 +1041,11 @@ export function HomeDashboard() {
     if (acHourlyIntervalRef.current) { clearInterval(acHourlyIntervalRef.current); acHourlyIntervalRef.current = null }
     if (acHourlyTickRef.current) { clearInterval(acHourlyTickRef.current); acHourlyTickRef.current = null }
     setAcHoursRemaining(null)
-  }, [automation])
+  }, [automationRunning])
 
   // ===== NHÓM 1: Đèn trong nhà - bật ngay khi có người (không phụ thuộc lux) =====
   useEffect(() => {
-    if (!automation) {
+    if (!automationRunning) {
       prevGroup1PresenceRef.current = { ...presence }
       return
     }
@@ -1017,7 +1054,6 @@ export function HomeDashboard() {
       const wasPresent = prev[sensor]
       const isPresent = presence[sensor]
       if (isPresent && !wasPresent) {
-        // Có người mới xuất hiện → bật đèn ngay nếu chưa bật
         if (!lights[room]) {
           setLights(state => ({ ...state, [room]: true }))
           addEvent(`LD2410 ${label} phát hiện người → Bật ${ROOM_TITLE[room]}`, 'auto')
@@ -1026,11 +1062,11 @@ export function HomeDashboard() {
       }
     })
     prevGroup1PresenceRef.current = { ...presence }
-  }, [presence, automation, lights, pushLightToHA])
+  }, [presence, automationRunning, lights, pushLightToHA])
 
-  // ===== NHÓM 2: Đèn cửa buồng - chỉ bật khi có người (Hiên hoặc PN) VÀ trời tối (lux <= 300) =====
+  // ===== NHÓM 2: Đèn cửa buồng - chỉ bật khi có người VÀ trời tối (lux <= 300) =====
   useEffect(() => {
-    if (!automation) {
+    if (!automationRunning) {
       prevGroup2PresenceRef.current = { ...presence }
       prevLuxRef.current = lux
       return
@@ -1042,8 +1078,6 @@ export function HomeDashboard() {
     const currentlyDark = lux <= 300
     const someonePresent = presence.hienNha || presence.phongNgu
 
-    // Kích hoạt khi: vừa có người mới xuất hiện và trời đang tối,
-    // HOẶC: vừa chuyển sang tối và đang có người
     if ((hasPresenceTrigger && currentlyDark) || (luxBecameDark && someonePresent)) {
       if (!lights.cuaBuong) {
         setLights(state => ({ ...state, cuaBuong: true }))
@@ -1053,15 +1087,13 @@ export function HomeDashboard() {
     }
     prevGroup2PresenceRef.current = { ...presence }
     prevLuxRef.current = lux
-  }, [presence, lux, automation, lights.cuaBuong, pushLightToHA])
+  }, [presence, lux, automationRunning, lights.cuaBuong, pushLightToHA])
 
   // ===== NHÓM 3: Ngoài trời - KHÔNG tự động bật theo cảm biến hiện diện =====
-  // Không có effect nào ở đây (sanVuon/hienNha không map sang đèn ngoài trời).
-  // Chỉ bật/tắt thủ công khi bấm nút.
 
   // Rule 1: MQ2 → quạt hút mùi PN
   useEffect(() => {
-    if (!automation) return
+    if (!automationRunning) return
     if (mq2Bedroom > mq2Threshold) {
       if (!fans.exhaustPN) {
         setFans(previous => ({ ...previous, exhaustPN: true }))
@@ -1075,11 +1107,11 @@ export function HomeDashboard() {
         pushFanToHA('exhaustPN', false)
       }
     }
-  }, [mq2Bedroom, mq2Threshold, automation, fans.exhaustPN, pushFanToHA])
+  }, [mq2Bedroom, mq2Threshold, automationRunning, fans.exhaustPN, pushFanToHA])
 
   // Rule 2: CO2 → quạt gió tươi PA + escalate
   useEffect(() => {
-    if (!automation) return
+    if (!automationRunning) return
     if (co2Dining > co2Threshold) {
       if (co2OffTimerRef.current) { clearTimeout(co2OffTimerRef.current); co2OffTimerRef.current = null }
       if (co2OffTickRef.current) { clearInterval(co2OffTickRef.current); co2OffTickRef.current = null }
@@ -1133,11 +1165,11 @@ export function HomeDashboard() {
         co2OffTickRef.current = tick
       }
     }
-  }, [co2Dining, co2Threshold, automation, fans.freshAirPA, fans.exhaustPA, pushFanToHA])
+  }, [co2Dining, co2Threshold, automationRunning, fans.freshAirPA, fans.exhaustPA, pushFanToHA])
 
   // Rule 3: Làm mát tự nhiên
   useEffect(() => {
-    if (!automation) return
+    if (!automationRunning) return
     const outdoorOk = outdoorTemp < 28
     const roomTooHot = grandparentsTemp > 30 || diningTemp > 30
     const hasPresence = (grandparentsTemp > 30 && presence.phongOngBa) || (diningTemp > 30 && presence.phongAn) || (grandparentsTemp > 30 && presence.phongNgu) || (diningTemp > 30 && presence.bep)
@@ -1179,11 +1211,11 @@ export function HomeDashboard() {
       }
       addEvent('Điều kiện làm mát tự nhiên không còn → Dừng quạt gió tươi PA', 'auto')
     }
-  }, [outdoorTemp, grandparentsTemp, diningTemp, presence, automation, co2Dining, co2Threshold, fans.freshAirPA, pushFanToHA])
+  }, [outdoorTemp, grandparentsTemp, diningTemp, presence, automationRunning, co2Dining, co2Threshold, fans.freshAirPA, pushFanToHA])
 
-  // ===== LUẬT 4: Tự động tắt đèn sau khi phòng trống (demo: 2 giây) =====
+  // ===== LUẬT 4: Tự động tắt đèn sau khi phòng trống =====
   useEffect(() => {
-    if (!automation) {
+    if (!automationRunning) {
       prevAutoOffPresenceRef.current = { ...presence }
       Object.values(autoOffTimersRef.current).forEach(t => { if (t) clearTimeout(t) })
       Object.values(autoOffTicksRef.current).forEach(t => { if (t) clearInterval(t) })
@@ -1197,7 +1229,6 @@ export function HomeDashboard() {
       const wasPresent = prevAutoOffPresenceRef.current[sensor]
       const isPresent = presence[sensor]
 
-      // Có người trở lại -> hủy đếm ngược
       if (isPresent && !wasPresent) {
         const timer = autoOffTimersRef.current[sensor]
         const tick = autoOffTicksRef.current[sensor]
@@ -1212,7 +1243,6 @@ export function HomeDashboard() {
         addEvent(`Có người trở lại ${label} → Hủy hẹn tắt đèn`, 'auto')
       }
 
-      // Có người → Không có người: bắt đầu đếm ngược nếu có ít nhất 1 đèn đang bật
       if (!isPresent && wasPresent) {
         const anyLightOn = rooms.some(r => lightsRef.current[r])
         if (anyLightOn) {
@@ -1237,7 +1267,6 @@ export function HomeDashboard() {
               delete next[sensor]
               return next
             })
-            // Kiểm tra lại presence hiện tại (có thể đã thay đổi) trước khi tắt
             const stillEmpty = !presenceRef.current[sensor]
             if (!stillEmpty) return
             const lightsToTurnOff = rooms.filter(r => lightsRef.current[r])
@@ -1259,7 +1288,7 @@ export function HomeDashboard() {
     })
 
     prevAutoOffPresenceRef.current = { ...presence }
-  }, [presence, automation, pushLightToHA])
+  }, [presence, automationRunning, pushLightToHA])
 
   // ===== LUẬT 5: Chu kỳ thông gió & hút mùi tự động khi bật Điều hòa =====
   const clearAcVentPhase1 = useCallback(() => {
@@ -1284,7 +1313,6 @@ export function HomeDashboard() {
   }, [])
 
   const runAcVentCycle = useCallback((reason: string) => {
-    // Giai đoạn 2: bật Gió tươi PN + Hút mùi PN (demo: 2s / 3s)
     addEvent(reason, 'auto')
     setFans(prev => ({ ...prev, freshAirPN: true }))
     pushFanToHA('freshAirPN', true)
@@ -1331,16 +1359,15 @@ export function HomeDashboard() {
     }, TIMING.acVentCycleExhaust * 1000)
   }, [addEvent, pushFanToHA])
 
-  // Khi AC bật/tắt
+  // Khi AC bật/tắt — chỉ chạy khi automationRunning
   useEffect(() => {
-    if (!automation) {
+    if (!automationRunning) {
       clearAcVentPhase1()
       clearAcVentCycle()
       clearAcHourly()
       return
     }
     if (acOn) {
-      // Giai đoạn 1: Hút mùi PN (demo: 2 giây)
       clearAcVentPhase1()
       setFans(prev => ({ ...prev, exhaustPN: true }))
       pushFanToHA('exhaustPN', true)
@@ -1358,7 +1385,6 @@ export function HomeDashboard() {
         acVentPhase1TickRef.current = null
         acVentPhase1TimerRef.current = null
         setAcVentPhase1Remaining(null)
-        // Chỉ tắt nếu không có chu kỳ 2h nào đang bật exhaustPN
         if (acVentCycleExhaustTimerRef.current === null) {
           setFans(prev => ({ ...prev, exhaustPN: false }))
           addEvent('Hút mùi PN: hết giai đoạn khởi động → Tắt', 'auto')
@@ -1366,7 +1392,6 @@ export function HomeDashboard() {
         }
       }, TIMING.acVentPhase1 * 1000)
 
-      // Lên lịch chu kỳ định kỳ (demo: 3 giây)
       clearAcHourly()
       setAcHoursRemaining(TIMING.acHourlyCycle)
       const hourlyTick = setInterval(() => {
@@ -1377,7 +1402,6 @@ export function HomeDashboard() {
       }, 1000)
       acHourlyTickRef.current = hourlyTick
       const hourly = setInterval(() => {
-        // Mỗi chu kỳ kích hoạt
         runAcVentCycle('Điều hòa hoạt động đủ chu kỳ → Bật Gió tươi PN & Hút mùi PN (demo)')
         setAcHoursRemaining(TIMING.acHourlyCycle)
       }, TIMING.acHourlyCycle * 1000)
@@ -1386,21 +1410,27 @@ export function HomeDashboard() {
       clearAcVentPhase1()
       clearAcVentCycle()
       clearAcHourly()
-      // Nếu đang có exhaustPN/freshAirPN do AC cycle, tắt luôn
       setFans(prev => {
         if (!prev.exhaustPN && !prev.freshAirPN) return prev
         return { ...prev, exhaustPN: false, freshAirPN: false }
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [acOn, automation])
+  }, [acOn, automationRunning])
 
   const handleAcToggle = useCallback((next: boolean) => {
     setAcOn(next)
-    addEvent(`Điều hòa Daikin ${next ? 'đã bật · 24°C' : 'đã tắt'}`)
+    addEvent(`Điều hòa Daikin ${next ? 'đã bật' : 'đã tắt'}`)
     if (mode === 'live' && liveConnected) {
       lockEntity(ENTITY_MAP.climate.ac, 2500)
-      callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.ac, domain: 'climate', action: next ? 'turn_on' : 'turn_off' }) })
+      callHA({
+        method: 'POST',
+        body: JSON.stringify({
+          entity_id: ENTITY_MAP.climate.ac,
+          domain: 'climate',
+          action: next ? 'turn_on' : 'turn_off',
+        }),
+      })
         .catch(error => {
           const message = error instanceof Error ? error.message : String(error)
           addEvent(`Không gửi được lệnh điều hòa: ${message}`, 'system')
@@ -1412,8 +1442,17 @@ export function HomeDashboard() {
     setFanOn(next)
     addEvent(`Quạt trần ${next ? 'đã bật' : 'đã tắt'}`)
     if (mode === 'live' && liveConnected) {
-      lockEntity(ENTITY_MAP.climate.fan, 2500)
-      callHA({ method: 'POST', body: JSON.stringify({ entity_id: ENTITY_MAP.climate.fan, domain: 'fan', action: next ? 'turn_on' : 'turn_off' }) })
+      const entityId = ENTITY_MAP.climate.fan
+      lockEntity(entityId, 2500)
+      // script.fan_power: gọi service turn_on (script tự xử lý toggle bên trong)
+      callHA({
+        method: 'POST',
+        body: JSON.stringify({
+          entity_id: entityId,
+          domain: 'script',
+          action: 'turn_on',
+        }),
+      })
         .catch(error => {
           const message = error instanceof Error ? error.message : String(error)
           addEvent(`Không gửi được lệnh quạt trần: ${message}`, 'system')
@@ -1511,6 +1550,8 @@ export function HomeDashboard() {
                   grandparentsHum={grandparentsHum}
                   diningTemp={diningTemp}
                   diningHum={diningHum}
+                  bedroomTemp={bedroomTemp}
+                  bedroomHum={bedroomHum}
                   mq2Bedroom={mq2Bedroom}
                   mq2Threshold={mq2Threshold}
                   co2Dining={co2Dining}
@@ -1554,7 +1595,7 @@ export function HomeDashboard() {
               </div>
             )}
             {mode === 'live' && liveConnected && (
-              <div className="live-notice"><Radio size={14} /> Đã kết nối Home Assistant · Đồng bộ mỗi 3 giây.</div>
+              <div className="live-notice"><Radio size={14} /> Đã kết nối Home Assistant · Đồng bộ mỗi 3 giây · Automation trình duyệt đã tạm dừng.</div>
             )}
             <section className="panel-section sensors-section"><div className="section-heading"><div><span className="section-icon"><Users size={15} /></span><h3>Cảm biến hiện diện</h3></div><span className="device-count">LD2410 <span>· 9</span></span></div>
               {(['kho', 'sanVuon', 'phongOngBa', 'nhaVeSinh', 'bep', 'phongAn', 'sanBe', 'hienNha', 'phongNgu'] as SensorKey[]).map(sensor => {
@@ -1568,6 +1609,7 @@ export function HomeDashboard() {
               <div className="environment-item"><div className="environment-label"><span><Thermometer size={14} /> Nhiệt độ sân vườn</span><strong>{outdoorTemp.toFixed(1)}<small>°C</small></strong></div><input aria-label="Nhiệt độ sân vườn" type="range" min="15" max="42" step="0.5" value={outdoorTemp} disabled={slidersLocked} onChange={e => !slidersLocked && setOutdoorTemp(Number(e.target.value))} /><div className="range-ends"><span>15°C</span><span>42°C</span></div></div>
               <div className="environment-item"><div className="environment-label"><span><Thermometer size={14} /> Nhiệt độ phòng ông bà</span><strong>{grandparentsTemp.toFixed(1)}<small>°C</small></strong></div><input aria-label="Nhiệt độ phòng ông bà" type="range" min="18" max="40" step="0.5" value={grandparentsTemp} disabled={slidersLocked} onChange={e => !slidersLocked && setGrandparentsTemp(Number(e.target.value))} /><div className="range-ends"><span>18°C</span><span>40°C</span></div></div>
               <div className="environment-item"><div className="environment-label"><span><Thermometer size={14} /> Nhiệt độ phòng ăn</span><strong>{diningTemp.toFixed(1)}<small>°C</small></strong></div><input aria-label="Nhiệt độ phòng ăn" type="range" min="18" max="40" step="0.5" value={diningTemp} disabled={slidersLocked} onChange={e => !slidersLocked && setDiningTemp(Number(e.target.value))} /><div className="range-ends"><span>18°C</span><span>40°C</span></div></div>
+              <div className="environment-item"><div className="environment-label"><span><Thermometer size={14} /> Nhiệt độ phòng ngủ (Daikin)</span><strong>{bedroomTemp.toFixed(1)}<small>°C</small></strong></div><div className="range-ends"><span>{bedroomHum}% · Đọc từ HA</span><span>Chỉ đọc</span></div></div>
               <div className="environment-item"><div className="environment-label"><span><Wind size={14} /> Khói MQ2 phòng ngủ</span><strong>{mq2Bedroom} <small>ppm</small></strong></div><input aria-label="Khói MQ2 phòng ngủ" type="range" min="0" max="1000" step="10" value={mq2Bedroom} disabled={slidersLocked} onChange={e => !slidersLocked && setMq2Bedroom(Number(e.target.value))} /><div className="range-ends"><span>0 ppm</span><span>1000 ppm</span></div><div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}><label style={{ fontSize: '11px' }}>Ngưỡng MQ2:</label><input aria-label="Ngưỡng cài đặt MQ2" type="number" min="0" max="1000" step="10" value={mq2Threshold} onChange={e => setMq2Threshold(Number(e.target.value))} style={{ width: '70px', padding: '2px 6px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '12px' }} /><span style={{ fontSize: '11px' }}>ppm</span></div></div>
               <div className="environment-item"><div className="environment-label"><span><Wind size={14} /> CO2 phòng ăn</span><strong>{co2Dining} <small>ppm</small></strong></div><input aria-label="CO2 phòng ăn" type="range" min="400" max="2500" step="10" value={co2Dining} disabled={slidersLocked} onChange={e => !slidersLocked && setCo2Dining(Number(e.target.value))} /><div className="range-ends"><span>400 ppm</span><span>2500 ppm</span></div><div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}><label style={{ fontSize: '11px' }}>Ngưỡng CO2:</label><input aria-label="Ngưỡng cài đặt CO2" type="number" min="400" max="2500" step="50" value={co2Threshold} onChange={e => setCo2Threshold(Number(e.target.value))} style={{ width: '70px', padding: '2px 6px', borderRadius: '6px', border: '1px solid rgba(0,0,0,0.15)', fontSize: '12px' }} /><span style={{ fontSize: '11px' }}>ppm</span></div></div>
               {co2EscalationRemaining !== null && <div style={{ fontSize: '12px', color: '#e67e22', marginTop: '4px' }}>⏳ CO2 chưa giảm: bật thêm quạt hút mùi PA sau {formatCountdown(co2EscalationRemaining)}</div>}
@@ -1579,13 +1621,13 @@ export function HomeDashboard() {
               {acVentExhaustRemaining !== null && <div style={{ fontSize: '12px', color: '#2980b9', marginTop: '4px' }}>🌬️ Hút mùi PN chu kỳ: còn {formatCountdown(acVentExhaustRemaining)}</div>}
               <button className="outline-button" style={{ width: '100%', justifyContent: 'center', marginTop: '8px' }} onClick={() => runAcVentCycle('Test chu kỳ: Bật Gió tươi PN & Hút mùi PN (demo)')}>Test chu kỳ 2h (demo)</button>
             </section>
-            <section className="automation-card"><div className="automation-heading"><div className="automation-icon"><Zap size={16} /></div><div><strong>Tự động hóa thông minh</strong><span>{automation ? 'Đang hoạt động' : 'Đã tạm dừng'}</span></div><button className={`mini-switch ${automation ? 'on' : ''}`} aria-label={`${automation ? 'Tắt' : 'Bật'} tự động hóa`} aria-pressed={automation} onClick={toggleAutomation}><span /></button></div><p>Nhóm 1: Kho/Bếp/PA/WC/PK/PN/SB bật đèn ngay khi có người. Nhóm 2: Đèn cửa buồng bật khi Hiên/PN có người &amp; trời tối (lux ≤ 300). Nhóm 3: Đèn SV/cổng/hiên chỉ bật thủ công. MQ2 &gt; ngưỡng: bật hút mùi PN. CO2 &gt; ngưỡng: bật gió tươi PA, sau thời gian chờ bật thêm hút mùi PA; đạt chuẩn sau thời gian chờ tắt cả hai. Trời mát &lt;28°C, phòng &gt;30°C, có người: bật gió tươi PA (demo). Luật 4: phòng trống → tắt đèn sau thời gian chờ. Luật 5: AC PN bật → hút mùi PN giai đoạn khởi động; chu kỳ định kỳ → gió tươi PN + hút mùi PN. (Tất cả thời gian đang ở chế độ demo 1–3 giây.)</p></section>
+            <section className="automation-card"><div className="automation-heading"><div className="automation-icon"><Zap size={16} /></div><div><strong>Tự động hóa thông minh</strong><span>{slidersLocked ? 'Đang do Home Assistant xử lý' : automation ? 'Đang hoạt động' : 'Đã tạm dừng'}</span></div><button className={`mini-switch ${automation && !slidersLocked ? 'on' : ''}`} aria-label={`${automation ? 'Tắt' : 'Bật'} tự động hóa`} aria-pressed={automation} onClick={toggleAutomation} disabled={slidersLocked}><span /></button></div><p>Nhóm 1: Kho/Bếp/PA/WC/PK/PN/SB bật đèn ngay khi có người. Nhóm 2: Đèn cửa buồng bật khi Hiên/PN có người &amp; trời tối (lux ≤ 300). Nhóm 3: Đèn SV/cổng/hiên chỉ bật thủ công. MQ2 &gt; ngưỡng: bật hút mùi PN. CO2 &gt; ngưỡng: bật gió tươi PA, sau thời gian chờ bật thêm hút mùi PA; đạt chuẩn sau thời gian chờ tắt cả hai. Trời mát &lt;28°C, phòng &gt;30°C, có người: bật gió tươi PA (demo). Luật 4: phòng trống → tắt đèn sau thời gian chờ. Luật 5: AC PN bật → hút mùi PN giai đoạn khởi động; chu kỳ định kỳ → gió tươi PN + hút mùi PN. <strong>Ở chế độ Live, automation trình duyệt tự động tạm dừng — HA server đảm nhận toàn bộ.</strong></p></section>
             <section className="panel-section devices-section"><div className="section-heading"><div><span className="section-icon device-section"><Zap size={15} /></span><h3>Thiết bị nhanh</h3></div><button className="text-action" onClick={() => addEvent('Đã mở danh sách thiết bị')}>Tất cả <ChevronRight size={12} /></button></div><div className="quick-devices">
               {(['freshAirPA', 'exhaustPA', 'freshAirPN', 'exhaustPN'] as FanKey[]).map(key => (
                 <button key={key} className={`device-tile ${fans[key] ? 'active' : ''}`} onClick={() => toggleFan(key)}><span className="tile-icon"><Fan size={17} className={fans[key] ? 'fan-spin' : ''} /></span><span><strong>{FAN_SHORT[key]}</strong><small>{fans[key] ? 'Đang bật' : 'Tắt'}</small></span><ChevronDown size={13} /></button>
               ))}
               <button className={`device-tile ${acOn ? 'active' : ''}`} onClick={() => handleAcToggle(!acOn)}><span className="tile-icon"><AirVent size={17} /></span><span><strong>Điều hòa</strong><small>{acOn ? `${acTargetTemp !== null ? `${acTargetTemp}°` : 'Bật'} · Đang bật` : 'Daikin · Tắt'}</small></span><ChevronDown size={13} /></button>
-              <button className={`device-tile ${fanOn ? 'active' : ''}`} onClick={() => handleCeilingFanToggle(!fanOn)}><span className="tile-icon"><Fan size={17} className={fanOn ? 'fan-spin' : ''} /></span><span><strong>Quạt trần</strong><small>{fanOn ? 'Đang bật · Mức 2' : 'Phòng khách · Tắt'}</small></span><ChevronDown size={13} /></button>
+              <button className={`device-tile ${fanOn ? 'active' : ''}`} onClick={() => handleCeilingFanToggle(!fanOn)}><span className="tile-icon"><Fan size={17} className={fanOn ? 'fan-spin' : ''} /></span><span><strong>Quạt trần</strong><small>{fanOn ? 'Đang bật' : 'Script · Tắt'}</small></span><ChevronDown size={13} /></button>
             </div></section>
             <section className="event-section"><div className="section-heading"><div><span className="section-icon event-section-icon"><Activity size={15} /></span><h3>Nhật ký hoạt động</h3></div><button className="text-action" onClick={() => setEvents([])}>Xóa nhật ký</button></div><div className="event-list">{events.length ? events.map((event, index) => <div className="event-row" key={`${event.time}-${index}`}><span className={`event-dot ${event.type}`} /><span className="event-time">{event.time}</span><p>{event.message}</p></div>) : <p className="empty-events">Chưa có hoạt động mới.</p>}</div></section>
             <div className="panel-footer"><Battery size={13} /> Tất cả cảm biến đang kết nối <span className="footer-healthy"><span /> Tốt</span></div>
@@ -1598,7 +1640,7 @@ export function HomeDashboard() {
 
 function PinButton({
   pin, lights, presence, fans, lux, editMode, onLight, onPresence, onFan, onDragStart, acOn, acTargetTemp, onAc,
-  outdoorTemp, outdoorHum, grandparentsTemp, grandparentsHum, diningTemp, diningHum,
+  outdoorTemp, outdoorHum, grandparentsTemp, grandparentsHum, diningTemp, diningHum, bedroomTemp, bedroomHum,
   mq2Bedroom, mq2Threshold, co2Dining, co2Threshold, co2OffRemaining, naturalCoolingRemaining, co2EscalationRemaining,
   distances, autoOffRemaining, acVentPhase1Remaining, acVentFreshRemaining, acVentExhaustRemaining,
 }: {
@@ -1621,6 +1663,8 @@ function PinButton({
   grandparentsHum: number
   diningTemp: number
   diningHum: number
+  bedroomTemp: number
+  bedroomHum: number
   mq2Bedroom: number
   mq2Threshold: number
   co2Dining: number
@@ -1654,7 +1698,8 @@ function PinButton({
       ? `${acTargetTemp !== null ? `${acTargetTemp}°` : 'Bật'} · Đang bật`
       : 'Đang tắt'
   } else if (pin.id === 'pn-climate') {
-    detail = `${grandparentsTemp.toFixed(1)}° · ${grandparentsHum}%`
+    // Phòng ngủ: đọc riêng từ Daikin AC
+    detail = `${bedroomTemp.toFixed(1)}° · ${bedroomHum}%`
   } else if (pin.id === 'pk-climate') {
     detail = `${grandparentsTemp.toFixed(1)}° · ${grandparentsHum}%`
   } else if (pin.id === 'pa-climate') {
